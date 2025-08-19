@@ -208,7 +208,7 @@ impl Scanner {
 		self.add_token_a(TokenType::String, Object::String(value.to_owned()));
 	}
 
-	fn is_digit(&mut self, c: char) -> bool {
+	fn is_digit(&self, c: char) -> bool {
 		c >= '0' && c <= '9'
 	}
 
@@ -232,11 +232,11 @@ impl Scanner {
 		);
 	}
 
-	fn is_alpha(&mut self, c: char) -> bool {
+	fn is_alpha(&self, c: char) -> bool {
 		(c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'
 	}
 
-	fn is_alpha_numeric(&mut self, c: char) -> bool {
+	fn is_alpha_numeric(&self, c: char) -> bool {
 		self.is_alpha(c) || self.is_digit(c)
 	}
 
