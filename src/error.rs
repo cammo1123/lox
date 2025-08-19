@@ -10,3 +10,9 @@ fn report(line: usize, where_: &str, message: &str) {
 		HAD_ERROR = true;
 	}
 }	
+
+pub fn had_error() -> bool {
+	unsafe {
+		return HAD_ERROR;
+	}
+}

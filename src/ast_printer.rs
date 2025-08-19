@@ -1,4 +1,5 @@
 use crate::r#gen::expr::{Expr, Visitor};
+use crate::object::Object;
 use crate::token::Token;
 use std::fmt::Write;
 
@@ -33,8 +34,8 @@ impl Visitor<String> for AstPrinter {
     fn visit_grouping_expr(&mut self, expression: &Expr) -> String {
         self.parenthesize("group", &[expression])
     }
-    fn visit_literal_expr(&mut self, value: &String) -> String {
-        match value {v => v.clone() }
+    fn visit_literal_expr(&mut self, value: &Object) -> String {
+        value.to_string()
     }
     fn visit_unary_expr(&mut self, operator: &Token, right: &Expr) -> String {
         self.parenthesize(&operator.lexeme, &[right])

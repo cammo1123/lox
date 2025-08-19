@@ -5,5 +5,6 @@ pub mod interpreter;
 pub mod parser;
 pub mod r#gen;
 pub mod scanner;
+pub mod object;
 
 pub use interpreter::{run_file, run_prompt};

@@ -1,4 +1,4 @@
-use crate::{error::error, token::{ Token, TokenType }};
+use crate::{error::error, object::Object, token::{ Token, TokenType }};
 use std::collections::HashMap;
 use once_cell::sync::Lazy;
 
@@ -49,7 +49,7 @@ impl Scanner {
 			self.scan_token();
 		}
 
-		self.tokens.push(Token::new(TokenType::EOF, "", self.line));
+		self.tokens.push(Token::new(TokenType::EOF, "", Object::Nil, self.line));
         self.tokens
     }
 
@@ -138,8 +138,12 @@ impl Scanner {
 	}
 
 	fn add_token(&mut self, token_type: TokenType) {
+		self.add_token_a(token_type, Object::Nil);
+	}
+
+	fn add_token_a(&mut self, token_type: TokenType, literal: Object) {
 		let text = &self.source[self.start..self.current];
-		self.tokens.push(Token::new(token_type, text, self.line));
+		self.tokens.push(Token::new(token_type, text, literal, self.line));
 	}
 
 	fn match_str(&mut self, expected: char) -> bool {
@@ -201,7 +205,7 @@ impl Scanner {
 		self.advance();
 
 		let value = &self.source[self.start + 1..self.current - 1];
-		self.tokens.push(Token::new(TokenType::String, value, self.line));
+		self.add_token_a(TokenType::String, Object::String(value.to_owned()));
 	}
 
 	fn is_digit(&mut self, c: char) -> bool {
@@ -222,7 +226,10 @@ impl Scanner {
 		}
 
         let value = &self.source[self.start..self.current];
-		self.tokens.push(Token::new(TokenType::Number, value, self.line));
+		self.add_token_a(
+			TokenType::Number,
+			Object::Number(value.parse::<f64>().expect("Invalid number literal")),
+		);
 	}
 
 	fn is_alpha(&mut self, c: char) -> bool {

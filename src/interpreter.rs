@@ -1,6 +1,6 @@
-use std::{ fs::File, io::{Read, Write, self} };
+use std::{ fmt::Error, fs::File, io::{self, Read, Write} };
 
-use crate::token::Token;
+use crate::{ast_printer::AstPrinter, error::had_error, parser::Parser, token::Token};
 use crate::scanner::Scanner;
 
 
@@ -44,9 +44,14 @@ pub fn run_prompt() -> Result<(), Box<dyn std::error::Error>> {
 fn run(source: &str) -> Result<(), Box<dyn std::error::Error>> {
     let scanner = Scanner::new(source);
     let tokens: Vec<Token> = scanner.scan_tokens();
+    let mut parser = Parser::new(&tokens);
 
-    for token in tokens.iter() {
-        // println!("{token}");
+    if had_error() {
+        return Err(Box::new(Error));
+    }
+
+    if let Some(expression) = parser.parse() {
+        println!("{}", AstPrinter::new().print(&expression));
     }
     
     Ok(())
