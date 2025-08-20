@@ -20,10 +20,10 @@ pub trait Visitor<T> {
 impl Expr {
     pub fn accept<T, V: Visitor<T>>(&self, visitor: &mut V) -> Result<T, RuntimeError> {
         match self {
-            Expr::Binary { left, operator, right } => visitor.visit_binary_expr(&*left, operator, &*right),
+            Expr::Binary { left, operator, right } => visitor.visit_binary_expr(&*left, &operator, &*right),
             Expr::Grouping { expression } => visitor.visit_grouping_expr(&*expression),
-            Expr::Literal { value } => visitor.visit_literal_expr(value),
-            Expr::Unary { operator, right } => visitor.visit_unary_expr(operator, &*right),
+            Expr::Literal { value } => visitor.visit_literal_expr(&value),
+            Expr::Unary { operator, right } => visitor.visit_unary_expr(&operator, &*right),
         }
     }
 }
