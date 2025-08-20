@@ -1,3 +1,8 @@
-var a = 2;
-var b = a + 1;
-print b;
+var a = 0;
+var temp;
+
+for (var b = 1; a < 10000000; b = temp + b) {
+  print a;
+  temp = a;
+  a = b;
+}

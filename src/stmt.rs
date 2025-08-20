@@ -7,16 +7,20 @@ pub enum Stmt {
     Nil,
     Block { statements: Vec<Stmt> },
     Expression { expression: Expr },
+    If { condition: Expr, then_branch: Box<Stmt>, else_branch: Box<Stmt> },
     Print { expression: Expr },
     Var { name: Token, initializer: Expr },
+    While { condition: Expr, body: Box<Stmt> },
 }
 
 pub trait Visitor<T> {
     fn visit_null_stmt(&mut self) -> Result<T, RuntimeError>;
     fn visit_block_stmt(&mut self, statements: &Vec<Stmt>) -> Result<T, RuntimeError>;
     fn visit_expression_stmt(&mut self, expression: &Expr) -> Result<T, RuntimeError>;
+    fn visit_if_stmt(&mut self, condition: &Expr, then_branch: &Stmt, else_branch: &Stmt) -> Result<T, RuntimeError>;
     fn visit_print_stmt(&mut self, expression: &Expr) -> Result<T, RuntimeError>;
     fn visit_var_stmt(&mut self, name: &Token, initializer: &Expr) -> Result<T, RuntimeError>;
+    fn visit_while_stmt(&mut self, condition: &Expr, body: &Stmt) -> Result<T, RuntimeError>;
 }
 
 impl Stmt {
@@ -25,8 +29,10 @@ impl Stmt {
             Stmt::Nil => visitor.visit_null_stmt(),
             Stmt::Block { statements } => visitor.visit_block_stmt(&statements),
             Stmt::Expression { expression } => visitor.visit_expression_stmt(&expression),
+            Stmt::If { condition, then_branch, else_branch } => visitor.visit_if_stmt(&condition, &*then_branch, &*else_branch),
             Stmt::Print { expression } => visitor.visit_print_stmt(&expression),
             Stmt::Var { name, initializer } => visitor.visit_var_stmt(&name, &initializer),
+            Stmt::While { condition, body } => visitor.visit_while_stmt(&condition, &*body),
         }
     }
 }

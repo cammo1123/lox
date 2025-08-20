@@ -18,7 +18,7 @@ impl Parser {
 	}
 
 	fn assignment(&mut self) -> Result<Expr, ParseError> {
-		let expr = self.equality()?;
+		let expr = self.or()?;
 
 		if self.match_token(vec![TokenType::Equal]) {
 			let equals = self.previous();
@@ -32,6 +32,39 @@ impl Parser {
 			}
 
 			return Err(self.error(equals, "Invalid assignment target."));
+		}
+
+		Ok(expr)
+	}
+
+	fn or(&mut self) -> Result<Expr, ParseError> {
+		let mut expr = self.and()?;
+
+		while self.match_token(vec![TokenType::Or]) {
+			let operator = self.previous();
+			let right = self.and()?;
+			expr = Expr::Logical { 
+				left: Box::new(expr),
+				operator,
+				right: Box::new(right)
+			}
+		}
+
+		Ok(expr)
+	}
+
+	fn and(&mut self) -> Result<Expr, ParseError> {
+		let mut expr = self.equality()?;
+
+		while self.match_token(vec![TokenType::And]) {
+			let operator = self.previous();
+			let right = self.equality()?;
+
+			expr = Expr::Logical {
+				left: Box::new(expr),
+				operator,
+				right: Box::new(right)
+			};
 		}
 
 		Ok(expr)
@@ -66,6 +99,30 @@ impl Parser {
 		}
 	}
 
+	fn statement(&mut self) -> Result<Stmt, ParseError> {
+		if self.match_token(vec![TokenType::For]) {
+			return self.for_statement();
+		}
+
+		if self.match_token(vec![TokenType::If]) {
+			return self.if_statement();
+		}
+
+		if self.match_token(vec![TokenType::Print]) {
+			return self.print_statement();
+		}
+
+		if self.match_token(vec![TokenType::While]) {
+			return self.while_statement();
+		}
+
+		if self.match_token(vec![TokenType::LeftBrace]) {
+			return Ok(Stmt::Block { statements: self.block()? });
+		}
+
+		self.expression_statement()
+	}
+
 	fn var_declaration(&mut self) -> Result<Stmt, ParseError> {
 		let name = self.consume(TokenType::Identifier, "Expect variable name.")?;
 
@@ -78,16 +135,87 @@ impl Parser {
 		Ok(Stmt::Var { name, initializer })
 	}
 
-	fn statement(&mut self) -> Result<Stmt, ParseError> {
-		if self.match_token(vec![TokenType::Print]) {
-			return self.print_statement();
+	fn for_statement(&mut self) -> Result<Stmt, ParseError> {
+		self.consume(TokenType::LeftParen, "Expect '(' after 'for'.")?;
+
+		let initializer: Stmt;
+		if self.match_token(vec![TokenType::SemiColon]) {
+			initializer = Stmt::Nil;
+		} else if self.match_token(vec![TokenType::Var]) {
+			initializer = self.var_declaration()?;
+		} else {
+			initializer = self.expression_statement()?;
 		}
 
-		if self.match_token(vec![TokenType::LeftBrace]) {
-			return Ok(Stmt::Block { statements: self.block()? });
+		let mut condition = Expr::Nil;
+		if !self.check(&TokenType::SemiColon) {
+			condition = self.expression()?;
+		}
+		self.consume(TokenType::SemiColon, "Expect ';' after loop condition.")?;
+
+		let mut increment = Expr::Nil;
+		if !self.check(&TokenType::RightParen) {
+			increment = self.expression()?;
+		}
+		self.consume(TokenType::RightParen, "Expect ')' after for clauses.")?;
+
+		let mut body = self.statement()?;
+
+		if !matches!(increment, Expr::Nil) {
+			body = Stmt::Block { 
+				statements: vec![
+					body,
+					Stmt::Expression { 
+						expression: increment
+					}
+				]
+			}
 		}
 
-		self.expression_statement()
+		if matches!(condition, Expr::Nil) {
+			condition = Expr::Literal { value: Object::Bool(true) }
+		}
+		body = Stmt::While { condition, body: Box::new(body) };
+
+		if !matches!(initializer, Stmt::Nil) {
+			body = Stmt::Block { 
+				statements:  vec![
+					initializer,
+					body
+				]
+			}
+		}
+
+
+		Ok(body)
+	}
+
+	fn while_statement(&mut self) -> Result<Stmt, ParseError> {
+		self.consume(TokenType::LeftParen, "Expect '(' after 'while'.")?;
+		let condition = self.expression()?;
+		self.consume(TokenType::RightParen, "Expect ')' after condition.")?;
+		let body = self.statement()?;
+
+		Ok(Stmt::While { condition, body: Box::new(body) })
+	}
+
+	fn if_statement(&mut self) -> Result<Stmt, ParseError> {
+		self.consume(TokenType::LeftParen, "Expect '(' after 'if'.")?;
+		let condition = self.expression()?;
+		self.consume(TokenType::RightParen, "Expect ')' after 'if' condition.")?;
+
+		let then_branch = self.statement()?;
+		let mut else_branch = Stmt::Nil;
+
+		if self.match_token(vec![TokenType::Else]) {
+			else_branch = self.statement()?;
+		}
+
+		Ok(Stmt::If { 
+			condition,
+			then_branch: Box::new(then_branch),
+			else_branch: Box::new(else_branch) 
+		})
 	}
 
 	fn print_statement(&mut self) -> Result<Stmt, ParseError> {

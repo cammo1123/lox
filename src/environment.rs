@@ -58,4 +58,8 @@ impl Environment {
 			}
 		}
 	}
+
+	pub fn take_enclosing(&mut self) -> Option<Environment> {
+        self.enclosing.take().map(|boxed| *boxed)
+    }
 }

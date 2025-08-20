@@ -57,4 +57,8 @@ impl Visitor<String> for AstPrinter {
     fn visit_null_expr(&mut self) -> Result<String, RuntimeError> {
         Ok("nil".to_string())
     }
+    
+    fn visit_logical_expr( &mut self, left: &Expr, operator: &Token, right: &Expr) -> Result<String, RuntimeError> {
+        self.parenthesize(&operator.lexeme, &[left, right])
+    }
 }

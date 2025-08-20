@@ -1,6 +1,4 @@
 
-use std::mem;
-
 use crate::{environment::Environment, error::{runtime_error, RuntimeError}, expr::{self, Expr}, object::Object, stmt::{self, Stmt}, token::{Token, TokenType}};
 
 pub struct Interpreter {
@@ -31,8 +29,9 @@ impl Interpreter {
         Ok(())
     }
 
-    fn execute_block(&mut self, statements: &[Stmt], environment: Environment) -> Result<(), RuntimeError> {
-        let previous = mem::replace(&mut self.environment, environment);
+    fn execute_block(&mut self, statements: &[Stmt]) -> Result<(), RuntimeError> {
+        let outer = std::mem::replace(&mut self.environment, Environment::default());
+        self.environment = Environment::new(outer);
 
         let result = (|| -> Result<(), RuntimeError> {
             for statement in statements.iter() {
@@ -41,7 +40,10 @@ impl Interpreter {
             Ok(())
 		})();
 
-        self.environment = previous;
+        let mut block_env = std::mem::replace(&mut self.environment, Environment::default());
+        self.environment = block_env
+            .take_enclosing()
+            .expect("block environment should have an enclosing");
 
         result
     }
@@ -57,16 +59,16 @@ impl Interpreter {
         }
     }
     
-    fn is_truthy(&self, object: Object) -> bool {
+    fn is_truthy(&self, object: &Object) -> bool {
         match object {
             Object::Nil => false,
-            Object::Bool(b) => b,
+            Object::Bool(b) => *b,
             _ => true
         }
     }
 
     fn is_equal(&self, a: Object, b: Object) -> bool {
-        if let Object::Nil = a && let Object::Nil = b {
+        if matches!(a, Object::Nil) && matches!(b, Object::Nil) {
             return true;
         }
 
@@ -108,7 +110,7 @@ impl expr::Visitor<Object> for Interpreter {
         let right = self.evaluate(right)?;
 
         let res = match operator.token_type {
-            TokenType::Bang => Object::Bool(!self.is_truthy(right)),
+            TokenType::Bang => Object::Bool(!self.is_truthy(&right)),
             TokenType::Minus => {
                 if let Object::Number(n) = right {
                     Object::Number(-n)
@@ -145,7 +147,7 @@ impl expr::Visitor<Object> for Interpreter {
             TokenType::Minus => {
                 self.check_number_operands(operator, &left, &right)?;
                 if let (Object::Number(l), Object::Number(r)) = (left, right) {
-                    return Ok(Object::Number(l + r))
+                    return Ok(Object::Number(l - r))
                 }
                 unreachable!()
             }
@@ -219,6 +221,22 @@ impl expr::Visitor<Object> for Interpreter {
     fn visit_null_expr(&mut self) -> Result<Object, RuntimeError> {
         todo!()
     }
+    
+    fn visit_logical_expr(&mut self, left: &Expr, operator: &Token, right: &Expr) -> Result<Object, RuntimeError> {
+        let left = self.evaluate(left)?;
+
+        if operator.token_type == TokenType::Or {
+            if self.is_truthy(&left) {
+                return Ok(left);
+            }
+        } else {
+            if !self.is_truthy(&left) {
+                return Ok(left);
+            }
+        }
+
+        self.evaluate(right)
+    }
 }
 
 impl stmt::Visitor<()> for Interpreter {
@@ -245,7 +263,27 @@ impl stmt::Visitor<()> for Interpreter {
     }
     
     fn visit_block_stmt(&mut self, statements: &Vec<Stmt>) -> Result<(), RuntimeError> {
-        self.execute_block(statements, Environment::new(self.environment.clone()))?;
+        self.execute_block(statements)?;
+        Ok(())
+    }
+
+    fn visit_if_stmt(&mut self, condition: &Expr, then_branch: &Stmt, else_branch: &Stmt) -> Result<(), RuntimeError> {
+        let condition = self.evaluate(condition)?;
+        
+        if self.is_truthy(&condition) {
+            self.execute(then_branch)?;
+        } else if !matches!(else_branch, Stmt::Nil) {
+            self.execute(else_branch)?;
+        }
+
+        Ok(())
+    }
+
+    fn visit_while_stmt(&mut self, condition: &Expr, body: &Stmt) -> Result<(), RuntimeError> {
+        while { let condition = self.evaluate(condition)?; self.is_truthy(&condition) }{
+            self.execute(body)?;
+        }
+
         Ok(())
     }
     

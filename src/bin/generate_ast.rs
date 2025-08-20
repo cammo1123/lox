@@ -14,6 +14,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "Binary   : Expr left, Token operator, Expr right",
         "Grouping : Expr expression",
         "Literal  : Object value",
+        "Logical  : Expr left, Token operator, Expr right",
         "Unary    : Token operator, Expr right",
         "Variable : Token name",
     ])?;
@@ -21,8 +22,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     generate(out, "stmt", &vec![
         "Block      : Vec<Stmt> statements",
         "Expression : Expr expression",
+        "If         : Expr condition, Stmt then_branch, Stmt else_branch",
         "Print      : Expr expression",
         "Var        : Token name, Expr initializer",
+        "While      : Expr condition, Stmt body"
     ])?;
 
     Ok(())
