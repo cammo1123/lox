@@ -1,4 +1,3 @@
-use std::fmt::Error;
 use std::io::{self, Write};
 use std::sync::{LazyLock, Mutex};
 use std::{env, fs::File, io::Read, process::exit};
@@ -68,15 +67,14 @@ fn run(source: &str) -> Result<(), Box<dyn std::error::Error>> {
     let tokens: Vec<Token> = scanner.scan_tokens();
     let mut parser = Parser::new(&tokens);
 
-    if had_error() {
-        return Err(Box::new(Error));
-    }
+    let statements = parser.parse();
 
     let mut interpreter = INTERPRETER.lock()?;
-    if let Some(expression) = parser.parse() {
-        interpreter.interpret(&expression);
+    if had_error() {
+        return Ok(())
     }
-    
+
+    interpreter.interpret(&statements);
     Ok(())
 }
 

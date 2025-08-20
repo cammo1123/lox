@@ -1,20 +1,49 @@
 
-use crate::{error::{runtime_error, RuntimeError}, expr::{Expr, Visitor}, object::Object, token::{Token, TokenType}};
+use std::mem;
 
-pub struct Interpreter;
+use crate::{environment::Environment, error::{runtime_error, RuntimeError}, expr::{self, Expr}, object::Object, stmt::{self, Stmt}, token::{Token, TokenType}};
+
+pub struct Interpreter {
+    environment: Environment,
+}
+
 impl Interpreter {
     pub fn new() -> Self {
-		Self {}
+		Self {
+            environment: Environment::default()
+        }
 	}
 
-    pub fn interpret(&mut self, expr: &Expr) {
-        match self.evaluate(expr) {
-            Ok(value) => {
-                println!("{}", self.stringify(value));
+    pub fn interpret(&mut self, statements: &Vec<Stmt>) {
+        for statement in statements.iter() {
+            match self.execute(statement) {
+                Err(err) => {
+                    runtime_error(err);
+                    break;
+                }
+                _ => {}
             }
-
-            Err(err) => runtime_error(err),
         }
+    }
+
+    fn execute(&mut self, statement: &Stmt) -> Result<(), RuntimeError> {
+        statement.accept(self)?;
+        Ok(())
+    }
+
+    fn execute_block(&mut self, statements: &[Stmt], environment: Environment) -> Result<(), RuntimeError> {
+        let previous = mem::replace(&mut self.environment, environment);
+
+        let result = (|| -> Result<(), RuntimeError> {
+            for statement in statements.iter() {
+                self.execute(statement)?;
+            }
+            Ok(())
+		})();
+
+        self.environment = previous;
+
+        result
     }
     
     fn evaluate(&mut self, expr: &Expr) -> Result<Object, RuntimeError> {
@@ -66,7 +95,7 @@ impl Interpreter {
     }
 }
 
-impl Visitor<Object> for Interpreter {
+impl expr::Visitor<Object> for Interpreter {
     fn visit_literal_expr(&mut self, value: &Object) -> Result<Object, RuntimeError> {
         Ok(value.clone())
     }
@@ -174,5 +203,53 @@ impl Visitor<Object> for Interpreter {
 
             _ => Ok(Object::Nil)
         }
+    }
+    
+    fn visit_variable_expr(&mut self, name: &Token) -> Result<Object, RuntimeError> {
+        self.environment.get(name.clone())
+    }
+
+    fn visit_assign_expr(&mut self, name: &Token, value: &Expr) -> Result<Object, RuntimeError> {
+        let value = self.evaluate(value)?;
+
+        self.environment.assign(name.clone(), value.clone())?;
+        return Ok(value);
+    }
+    
+    fn visit_null_expr(&mut self) -> Result<Object, RuntimeError> {
+        todo!()
+    }
+}
+
+impl stmt::Visitor<()> for Interpreter {
+    fn visit_expression_stmt(&mut self, expression: &Expr) -> Result<(), RuntimeError> {
+        self.evaluate(expression)?;
+        Ok(())
+    }
+
+    fn visit_print_stmt(&mut self, expression: &Expr) -> Result<(), RuntimeError> {
+        let value = self.evaluate(expression)?;
+        println!("{}", self.stringify(value));
+        Ok(())
+    }
+    
+    fn visit_var_stmt(&mut self, name: &Token, initializer: &Expr) -> Result<(), RuntimeError> {
+        let mut value = Object::Nil;
+        
+        if !matches!(initializer, Expr::Nil)  {
+            value = self.evaluate(initializer)?;
+        }
+
+        self.environment.define(name.lexeme.clone(), value);
+        Ok(())
+    }
+    
+    fn visit_block_stmt(&mut self, statements: &Vec<Stmt>) -> Result<(), RuntimeError> {
+        self.execute_block(statements, Environment::new(self.environment.clone()))?;
+        Ok(())
+    }
+    
+    fn visit_null_stmt(&mut self) -> Result<(), RuntimeError> {
+        todo!()
     }
 }

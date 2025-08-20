@@ -4,26 +4,35 @@ use std::fmt::Debug;
 
 #[derive(Debug, Clone)]
 pub enum Expr {
+    Nil,
+    Assign { name: Token, value: Box<Expr> },
     Binary { left: Box<Expr>, operator: Token, right: Box<Expr> },
     Grouping { expression: Box<Expr> },
     Literal { value: Object },
     Unary { operator: Token, right: Box<Expr> },
+    Variable { name: Token },
 }
 
 pub trait Visitor<T> {
+    fn visit_null_expr(&mut self) -> Result<T, RuntimeError>;
+    fn visit_assign_expr(&mut self, name: &Token, value: &Expr) -> Result<T, RuntimeError>;
     fn visit_binary_expr(&mut self, left: &Expr, operator: &Token, right: &Expr) -> Result<T, RuntimeError>;
     fn visit_grouping_expr(&mut self, expression: &Expr) -> Result<T, RuntimeError>;
     fn visit_literal_expr(&mut self, value: &Object) -> Result<T, RuntimeError>;
     fn visit_unary_expr(&mut self, operator: &Token, right: &Expr) -> Result<T, RuntimeError>;
+    fn visit_variable_expr(&mut self, name: &Token) -> Result<T, RuntimeError>;
 }
 
 impl Expr {
     pub fn accept<T, V: Visitor<T>>(&self, visitor: &mut V) -> Result<T, RuntimeError> {
         match self {
+            Expr::Nil => visitor.visit_null_expr(),
+            Expr::Assign { name, value } => visitor.visit_assign_expr(&name, &*value),
             Expr::Binary { left, operator, right } => visitor.visit_binary_expr(&*left, &operator, &*right),
             Expr::Grouping { expression } => visitor.visit_grouping_expr(&*expression),
             Expr::Literal { value } => visitor.visit_literal_expr(&value),
             Expr::Unary { operator, right } => visitor.visit_unary_expr(&operator, &*right),
+            Expr::Variable { name } => visitor.visit_variable_expr(&name),
         }
     }
 }

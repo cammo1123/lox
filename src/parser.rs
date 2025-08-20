@@ -1,7 +1,4 @@
-use crate::{expr::Expr, object::Object, token::{Token, TokenType}};
-
-#[derive(Debug)]
-pub struct ParseError;
+use crate::{error::ParseError, expr::Expr, object::Object, stmt::Stmt, token::{Token, TokenType}};
 
 pub struct Parser {
 	tokens: Vec<Token>,
@@ -17,14 +14,105 @@ impl Parser {
 	}
 
 	fn expression(&mut self) -> Result<Expr, ParseError> {
-		self.equality()
+		self.assignment()
 	}
 
-	pub fn parse(&mut self) -> Option<Expr> {
-		match self.expression() {
-			Ok(expr) => Some(expr),
-			Err(_) => None,
+	fn assignment(&mut self) -> Result<Expr, ParseError> {
+		let expr = self.equality()?;
+
+		if self.match_token(vec![TokenType::Equal]) {
+			let equals = self.previous();
+			let value = self.assignment()?;
+
+			if let Expr::Variable { name } = &expr {
+				return Ok(Expr::Assign { 
+					name: name.clone(),
+					value: Box::new(value) 
+				})
+			}
+
+			return Err(self.error(equals, "Invalid assignment target."));
 		}
+
+		Ok(expr)
+	}
+
+	pub fn parse(&mut self) -> Vec<Stmt> {
+		let mut statements: Vec<Stmt> = Vec::new();
+		while !self.is_at_end() {
+			if let Some(declaration) = self.declaration() {
+				statements.push(declaration);
+			}
+		}
+
+		statements
+	}
+
+	fn declaration(&mut self) -> Option<Stmt> {
+		let mut steps = || -> Result<Stmt, ParseError> {
+			if self.match_token(vec![TokenType::Var]) {
+				return self.var_declaration();
+			}
+
+			self.statement()
+		};
+
+		match steps() {
+			Ok(res) => Some(res),
+			Err(_) => {
+				self.synchronize();
+				None
+			}
+		}
+	}
+
+	fn var_declaration(&mut self) -> Result<Stmt, ParseError> {
+		let name = self.consume(TokenType::Identifier, "Expect variable name.")?;
+
+		let mut initializer = Expr::Nil;
+		if self.match_token(vec![TokenType::Equal]) {
+			initializer = self.expression()?;
+		}
+
+		self.consume(TokenType::SemiColon, "Expect ';' after variable declaration.")?;
+		Ok(Stmt::Var { name, initializer })
+	}
+
+	fn statement(&mut self) -> Result<Stmt, ParseError> {
+		if self.match_token(vec![TokenType::Print]) {
+			return self.print_statement();
+		}
+
+		if self.match_token(vec![TokenType::LeftBrace]) {
+			return Ok(Stmt::Block { statements: self.block()? });
+		}
+
+		self.expression_statement()
+	}
+
+	fn print_statement(&mut self) -> Result<Stmt, ParseError> {
+		let value = self.expression()?;
+		self.consume(TokenType::SemiColon, "Expect ';' after value.")?;
+		Ok(Stmt::Print { expression: value })
+	}
+
+	fn expression_statement(&mut self) -> Result<Stmt, ParseError> {
+		let expr = self.expression()?;
+		self.consume(TokenType::SemiColon, "Expect ';' after expression.")?;
+		Ok(Stmt::Expression { expression: expr })
+	}
+
+	fn block(&mut self) -> Result<Vec<Stmt>, ParseError> {
+		let mut statements: Vec<Stmt> = Vec::new();
+
+		while !self.check(&TokenType::RightBrace) && !self.is_at_end() {
+			if let Some(declaration) = self.declaration() {
+				statements.push(declaration);
+			}
+		}
+
+		self.consume(TokenType::RightBrace, "Expect '}' after block.")?;
+		Ok(statements)
 	}
 
 	fn is_at_end(&self) -> bool {
@@ -87,14 +175,17 @@ impl Parser {
 			return Ok(Expr::Literal { value: self.previous().literal });
 		}
 
+		if self.match_token(vec![TokenType::Identifier]) {
+			return Ok(Expr::Variable { name: self.previous() });
+		}
+
 		if self.match_token(vec![TokenType::LeftParen]) {
 			let expression = self.expression()?;
 			self.consume(TokenType::RightParen, "Expect ')' after expression.")?;
 			return Ok(Expr::Grouping { expression: Box::new(expression) });
 		}
 
-		self.error(self.peek(), "Expect expression.");
-		Err(ParseError)
+		Err(self.error(self.peek(), "Expect expression."))
 	}
 
 	fn consume(&mut self, token_type: TokenType, message: &str) -> Result<Token, ParseError> {
@@ -102,16 +193,46 @@ impl Parser {
 			return Ok(self.advance());
 		}
 
-		self.error(self.peek(), message);
-		Err(ParseError)
+		Err(self.error(self.peek(), message))
 	}
 
-	fn error(&self, token: Token, message: &str) {
-		use crate::error;
-		if token.token_type == TokenType::EOF {
-			error::error(token.line, &format!("at end: {}", message));
-		} else {
-			error::error(token.line, &format!("at '{}' {}", token.lexeme, message));
+	fn error(&self, token: Token, message: &str) -> ParseError {
+		match token.token_type {
+			TokenType::EOF => ParseError::new( 
+				token.line, 
+				&format!("at end: {}", message) 
+			),
+			
+			_ => ParseError::new(
+				token.line, 
+				&format!("at '{}' {}", token.lexeme, message) 
+			)
+		}
+	}
+
+	fn synchronize(&mut self) {
+		self.advance();
+
+		while !self.is_at_end() {
+			if self.previous().token_type == TokenType::SemiColon {
+				return;
+			}
+
+			let recover = match self.peek().token_type {
+				TokenType::Class | TokenType::Fun | TokenType::Var | 
+				TokenType::For | TokenType::If | TokenType::While |
+				TokenType::Print | TokenType::Return => {
+					true
+				}
+
+				_ => false,
+			};
+
+			if recover {
+				return;
+			}
+
+			self.advance();
 		}
 	}
 

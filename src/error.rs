@@ -27,6 +27,29 @@ pub fn had_runtime_error() -> bool {
 }
 
 #[derive(Debug)]
+pub struct ParseError {
+    pub line: usize,
+    pub message: String,
+}
+
+impl ParseError {
+    pub fn new(line: usize, message: impl Into<String>) -> Self {
+        Self {
+            line,
+            message: message.into(),
+        }
+    }
+}
+
+impl fmt::Display for ParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Runtime error: {}", self.message)
+    }
+}
+
+impl std::error::Error for ParseError {}
+
+#[derive(Debug)]
 pub struct RuntimeError {
     pub token: Token,
     pub message: String,

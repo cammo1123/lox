@@ -10,15 +10,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let out = &args[1];
 
     generate(out, "expr", &vec![
+        "Assign   : Token name, Expr value",
         "Binary   : Expr left, Token operator, Expr right",
         "Grouping : Expr expression",
         "Literal  : Object value",
         "Unary    : Token operator, Expr right",
+        "Variable : Token name",
     ])?;
 
     generate(out, "stmt", &vec![
+        "Block      : Vec<Stmt> statements",
         "Expression : Expr expression",
         "Print      : Expr expression",
+        "Var        : Token name, Expr initializer",
     ])?;
 
     Ok(())
@@ -128,6 +132,7 @@ fn generate(
     // Enum
     writeln!(f, "#[derive(Debug, Clone)]")?;
     writeln!(f, "pub enum {} {{", base_type)?;
+    writeln!(f, "    Nil,")?;
     for t in types {
         let parts: Vec<&str> = t.split(':').collect();
         let name = parts[0].trim();
@@ -157,6 +162,7 @@ fn generate(
     // Visitor trait
     let base_lower = base_type.to_lowercase();
     writeln!(f, "pub trait Visitor<T> {{")?;
+    writeln!(f, "    fn visit_null_{}(&mut self) -> Result<T, RuntimeError>;", base_lower)?;
     for t in types {
         let parts: Vec<&str> = t.split(':').collect();
         let name = parts[0].trim();
@@ -188,6 +194,11 @@ fn generate(
          -> Result<T, RuntimeError> {{"
     )?;
     writeln!(f, "        match self {{")?;
+    writeln!(
+        f,
+        "            {}::Nil => visitor.visit_null_{}(),",
+        base_type, base_lower
+    )?;
     for t in types {
         let parts: Vec<&str> = t.split(':').collect();
         let name = parts[0].trim();
