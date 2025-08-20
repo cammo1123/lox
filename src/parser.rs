@@ -339,6 +339,7 @@ impl Parser {
 	}
 
 	fn synchronize(&mut self) {
+		println!("entering recovery for: {}", self.peek());
 		self.advance();
 
 		while !self.is_at_end() {
@@ -356,6 +357,7 @@ impl Parser {
 				_ => false,
 			};
 
+			println!("\tattempting to recover from: {:#?}", self.peek().token_type);
 			if recover {
 				return;
 			}
