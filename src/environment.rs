@@ -1,8 +1,8 @@
 use std::{collections::HashMap, sync::{Arc, Mutex}};
 
-use crate::{error::RuntimeError, object::Object, token::Token};
+use crate::{error::{InterpreterError, RuntimeError}, object::Object, token::Token};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Environment {
 	enclosing: Option<Arc<Mutex<Environment>>>,
 	values: HashMap<String, Object>
@@ -27,7 +27,7 @@ impl Environment {
 		self.values.insert(name.into(), value);
 	}
 
-	pub fn assign(&mut self, name: &Token, value: Object) -> Result<(), RuntimeError>{
+	pub fn assign(&mut self, name: &Token, value: Object) -> Result<(), InterpreterError>{
 		if self.values.contains_key(&name.lexeme) {
 			self.values.insert(name.lexeme.clone(), value);
 			return Ok(())
@@ -37,13 +37,13 @@ impl Environment {
 			return enclosing.lock().unwrap().assign(name, value)
 		}
 
-		Err(RuntimeError::new(
-			name.clone(), 
-			format!("Undefined variable '{}'.", name.lexeme)
-		))
+		Err(RuntimeError {
+			token: name.clone(), 
+			message: format!("Undefined variable '{}'.", name.lexeme)
+		}.into())
 	}
 
-	pub fn get(&self, name: &Token) -> Result<Object, RuntimeError> {
+	pub fn get(&self, name: &Token) -> Result<Object, InterpreterError> {
 		match self.values.get(&name.lexeme) {
 			Some(value) => Ok(value.clone()),
 			None => {
@@ -51,10 +51,10 @@ impl Environment {
 					return enclosing.lock().unwrap().get(name)
 				}
 
-				Err(RuntimeError::new(
-					name.clone(), 
-					format!("Undefined variable '{}'.", name.lexeme)
-				))
+				Err(RuntimeError {
+					token: name.clone(), 
+					message: format!("Undefined variable '{}'.", name.lexeme)
+				}.into())
 			}
 		}
 	}

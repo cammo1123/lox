@@ -1,6 +1,6 @@
 use std::{fmt, sync::Arc};
 
-use crate::{error::RuntimeError, interpreter::Interpreter};
+use crate::{error::InterpreterError, interpreter::Interpreter};
 
 #[derive(Clone)]
 pub enum Object {
@@ -54,5 +54,5 @@ impl PartialEq for Object {
 
 pub trait Callable: fmt::Debug {
     fn arity(&self) -> usize;
-    fn call(&self, interpreter: &mut Interpreter, arguments: Vec<Object>) -> Result<Object, RuntimeError>;
+    fn call(&self, interpreter: &mut Interpreter, arguments: Vec<Object>) -> Result<Object, InterpreterError>;
 }

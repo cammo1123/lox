@@ -8,3 +8,4 @@ pub mod stmt;
 pub mod scanner;
 pub mod object;
 pub mod environment;
+pub mod lox_function;

@@ -8,8 +8,17 @@ pub fn error(line: usize, message: &str) {
 	report(line, "", message);
 }
 
-pub fn runtime_error(error: RuntimeError) {
-	eprintln!("{}\n[line {}]", error.message, error.token.line);
+pub fn runtime_error(error: InterpreterError) {
+    match error {
+        InterpreterError::Runtime( runtime_error ) => {
+            eprintln!("{}\n[line {}]", runtime_error.message, runtime_error.token.line);
+        }
+
+        InterpreterError::Return( value ) => {
+            eprintln!("ERROR: returned {:#?}", value);
+        }
+    }
+
 	HAD_RUNTIME_ERROR.store(true, Ordering::SeqCst);
 }
 
@@ -50,38 +59,44 @@ impl fmt::Display for ParseError {
 impl std::error::Error for ParseError {}
 
 #[derive(Debug)]
-pub struct RuntimeError {
-    pub token: Token,
-    pub message: String,
+pub enum InterpreterError {
+    Runtime(RuntimeError),
+    Return(ReturnValue),
 }
 
-impl RuntimeError {
-    pub fn new(token: Token, message: impl Into<String>) -> Self {
-        Self {
-            token,
-            message: message.into(),
-        }
+impl From<RuntimeError> for InterpreterError {
+    fn from(err: RuntimeError) -> Self {
+        InterpreterError::Runtime(err)
     }
 }
 
-impl fmt::Display for RuntimeError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Runtime error: {}", self.message)
+impl From<ReturnValue> for InterpreterError {
+    fn from(val: ReturnValue) -> Self {
+        InterpreterError::Return(val)
     }
 }
 
-impl<T> From<PoisonError<T>> for RuntimeError {
+impl<T> From<PoisonError<T>> for InterpreterError {
     fn from(err: PoisonError<T>) -> Self {
-        RuntimeError::new(
-            Token { 
+        RuntimeError {
+            token: Token { 
                 token_type: TokenType::EOF, 
                 lexeme: "".to_owned(),
                 line: 0,
                 literal: Object::Nil
             },
-            format!("mutex poisoned: {:?}", err),
-        )
+            message: format!("mutex poisoned: {:?}", err),
+        }.into()
     }
 }
 
-impl std::error::Error for RuntimeError {}
+#[derive(Debug)]
+pub struct RuntimeError {
+    pub token: Token,
+    pub message: String,
+}
+
+#[derive(Debug)]
+pub struct ReturnValue {
+    pub value: Object,
+}

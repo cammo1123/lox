@@ -23,8 +23,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     generate(out, "stmt", &vec![
         "Block      : Vec<Stmt> statements",
         "Expression : Expr expression",
+        "Function   : Token name, Vec<Token> params, Vec<Stmt> body",
         "If         : Expr condition, Stmt then_branch, Stmt else_branch",
         "Print      : Expr expression",
+        "Return     : Token keyword, Expr value",
         "Var        : Token name, Expr initializer",
         "While      : Expr condition, Stmt body"
     ])?;
@@ -79,8 +81,8 @@ fn generate(
     let base_type = capitalize_first(base_name);
     let mut idents: HashSet<String> = HashSet::new();
 
-    // Always import RuntimeError for Visitor return type.
-    idents.insert("RuntimeError".to_string());
+    // Always import InterpreterError for Visitor return type.
+    idents.insert("InterpreterError".to_string());
 
     // Types we don't pull from crate.
     let prelude: &[&str] = &[
@@ -118,7 +120,7 @@ fn generate(
         match ident {
             "Object" => "object::Object".to_string(),
             "Token" => "token::Token".to_string(),
-            "RuntimeError" => "error::RuntimeError".to_string(),
+            "InterpreterError" => "error::InterpreterError".to_string(),
             other => format!("{}::{}", other.to_lowercase(), other),
         }
     }
@@ -166,7 +168,7 @@ fn generate(
     // Visitor trait
     let base_lower = base_type.to_lowercase();
     writeln!(f, "pub trait Visitor<T> {{")?;
-    writeln!(f, "    fn visit_null_{}(&mut self) -> Result<T, RuntimeError>;", base_lower)?;
+    writeln!(f, "    fn visit_null_{}(&mut self) -> Result<T, InterpreterError>;", base_lower)?;
     for t in types {
         let parts: Vec<&str> = t.split(':').collect();
         let name = parts[0].trim();
@@ -185,7 +187,7 @@ fn generate(
             };
             write!(f, ", {}: {}", nm, param_ty)?;
         }
-        writeln!(f, ") -> Result<T, RuntimeError>;")?;
+        writeln!(f, ") -> Result<T, InterpreterError>;")?;
     }
     writeln!(f, "}}")?;
     writeln!(f)?;
@@ -195,7 +197,7 @@ fn generate(
     writeln!(
         f,
         "    pub fn accept<T, V: Visitor<T>>(&self, visitor: &mut V) \
-         -> Result<T, RuntimeError> {{"
+         -> Result<T, InterpreterError> {{"
     )?;
     writeln!(f, "        match self {{")?;
     writeln!(
