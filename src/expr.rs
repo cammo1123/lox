@@ -7,6 +7,7 @@ pub enum Expr {
     Nil,
     Assign { name: Token, value: Box<Expr> },
     Binary { left: Box<Expr>, operator: Token, right: Box<Expr> },
+    Call { callee: Box<Expr>, paren: Token, arguments: Vec<Expr> },
     Grouping { expression: Box<Expr> },
     Literal { value: Object },
     Logical { left: Box<Expr>, operator: Token, right: Box<Expr> },
@@ -18,6 +19,7 @@ pub trait Visitor<T> {
     fn visit_null_expr(&mut self) -> Result<T, RuntimeError>;
     fn visit_assign_expr(&mut self, name: &Token, value: &Expr) -> Result<T, RuntimeError>;
     fn visit_binary_expr(&mut self, left: &Expr, operator: &Token, right: &Expr) -> Result<T, RuntimeError>;
+    fn visit_call_expr(&mut self, callee: &Expr, paren: &Token, arguments: &Vec<Expr>) -> Result<T, RuntimeError>;
     fn visit_grouping_expr(&mut self, expression: &Expr) -> Result<T, RuntimeError>;
     fn visit_literal_expr(&mut self, value: &Object) -> Result<T, RuntimeError>;
     fn visit_logical_expr(&mut self, left: &Expr, operator: &Token, right: &Expr) -> Result<T, RuntimeError>;
@@ -31,6 +33,7 @@ impl Expr {
             Expr::Nil => visitor.visit_null_expr(),
             Expr::Assign { name, value } => visitor.visit_assign_expr(&name, &*value),
             Expr::Binary { left, operator, right } => visitor.visit_binary_expr(&*left, &operator, &*right),
+            Expr::Call { callee, paren, arguments } => visitor.visit_call_expr(&*callee, &paren, &arguments),
             Expr::Grouping { expression } => visitor.visit_grouping_expr(&*expression),
             Expr::Literal { value } => visitor.visit_literal_expr(&value),
             Expr::Logical { left, operator, right } => visitor.visit_logical_expr(&*left, &operator, &*right),

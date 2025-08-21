@@ -61,4 +61,8 @@ impl Visitor<String> for AstPrinter {
     fn visit_logical_expr( &mut self, left: &Expr, operator: &Token, right: &Expr) -> Result<String, RuntimeError> {
         self.parenthesize(&operator.lexeme, &[left, right])
     }
+    
+    fn visit_call_expr(&mut self, callee: &Expr, paren: &Token, arguments: &Vec<Expr>) -> Result<String, RuntimeError> {
+        Ok(format!("(call {:?} {} {:?})", callee, paren, arguments))
+    }
 }

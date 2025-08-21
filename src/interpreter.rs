@@ -1,14 +1,15 @@
 
 use crate::{environment::Environment, error::{runtime_error, RuntimeError}, expr::{self, Expr}, object::Object, stmt::{self, Stmt}, token::{Token, TokenType}};
+use std::sync::{Arc, Mutex};
 
 pub struct Interpreter {
-    environment: Environment,
+    environment: Arc<Mutex<Environment>>,
 }
 
 impl Interpreter {
     pub fn new() -> Self {
 		Self {
-            environment: Environment::default()
+            environment: Arc::new(Mutex::new(Environment::default()))
         }
 	}
 
@@ -29,23 +30,19 @@ impl Interpreter {
         Ok(())
     }
 
-    fn execute_block(&mut self, statements: &[Stmt]) -> Result<(), RuntimeError> {
-        let outer = std::mem::replace(&mut self.environment, Environment::default());
-        self.environment = Environment::new(outer);
+    fn execute_block(&mut self, statements: &[Stmt], environment: Arc<Mutex<Environment>>) -> Result<(), RuntimeError> {
+        let previous_environment = Arc::clone(&self.environment);
+        self.environment = environment;
 
-        let result = (|| -> Result<(), RuntimeError> {
-            for statement in statements.iter() {
-                self.execute(statement)?;
+        for statement in statements.iter() {
+            if let Err(err) = self.execute(statement) {
+                self.environment = previous_environment;
+                return Err(err);
             }
-            Ok(())
-		})();
+        }
 
-        let mut block_env = std::mem::replace(&mut self.environment, Environment::default());
-        self.environment = block_env
-            .take_enclosing()
-            .expect("block environment should have an enclosing");
-
-        result
+        self.environment = previous_environment;
+        Ok(())
     }
     
     fn evaluate(&mut self, expr: &Expr) -> Result<Object, RuntimeError> {
@@ -208,18 +205,14 @@ impl expr::Visitor<Object> for Interpreter {
     }
     
     fn visit_variable_expr(&mut self, name: &Token) -> Result<Object, RuntimeError> {
-        self.environment.get(name.clone())
+        self.environment.lock()?.get(name)
     }
 
     fn visit_assign_expr(&mut self, name: &Token, value: &Expr) -> Result<Object, RuntimeError> {
         let value = self.evaluate(value)?;
 
-        self.environment.assign(name.clone(), value.clone())?;
+        self.environment.lock()?.assign(name, value.clone())?;
         return Ok(value);
-    }
-    
-    fn visit_null_expr(&mut self) -> Result<Object, RuntimeError> {
-        todo!()
     }
     
     fn visit_logical_expr(&mut self, left: &Expr, operator: &Token, right: &Expr) -> Result<Object, RuntimeError> {
@@ -236,6 +229,41 @@ impl expr::Visitor<Object> for Interpreter {
         }
 
         self.evaluate(right)
+    }
+    
+    fn visit_call_expr(&mut self, callee: &Expr, paren: &Token, arguments: &Vec<Expr>) -> Result<Object, RuntimeError> {
+        let callee = self.evaluate(callee)?;
+
+        let mut evaluated_arguments: Vec<Object> = Vec::new();
+        for argument in arguments {
+            evaluated_arguments.push(self.evaluate(argument)?);
+        }
+
+        match callee {
+            Object::Callable(callable) => {
+                if arguments.len() != callable.arity() {
+                    return Err(RuntimeError {
+                        token: paren.clone(),
+                        message: format!(
+                            "Expected {} arguments but got {}.",
+                            callable.arity(),
+                            arguments.len()
+                        )
+                    });
+                }
+
+                Ok(callable.call(self, evaluated_arguments)?)
+            },
+
+            _ => Err(RuntimeError { 
+                token: paren.clone(),
+                message: "Can only call functions and classes.".to_owned() 
+            })
+        }
+    }
+
+    fn visit_null_expr(&mut self) -> Result<Object, RuntimeError> {
+        todo!()
     }
 }
 
@@ -258,13 +286,13 @@ impl stmt::Visitor<()> for Interpreter {
             value = self.evaluate(initializer)?;
         }
 
-        self.environment.define(name.lexeme.clone(), value);
+        self.environment.lock()?.define(&name.lexeme, value);
         Ok(())
     }
     
     fn visit_block_stmt(&mut self, statements: &Vec<Stmt>) -> Result<(), RuntimeError> {
-        self.execute_block(statements)?;
-        Ok(())
+        let new_env_arc = Arc::new(Mutex::new(Environment::new(Arc::clone(&self.environment))));
+        self.execute_block(statements.as_slice(), new_env_arc)
     }
 
     fn visit_if_stmt(&mut self, condition: &Expr, then_branch: &Stmt, else_branch: &Stmt) -> Result<(), RuntimeError> {

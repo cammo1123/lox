@@ -1,5 +1,5 @@
-use crate::token::Token;
-use std::{fmt, sync::atomic::{AtomicBool, Ordering}};
+use crate::{object::Object, token::{Token, TokenType}};
+use std::{fmt, sync::{atomic::{AtomicBool, Ordering}, PoisonError}};
 
 pub static HAD_ERROR: AtomicBool = AtomicBool::new(false);
 pub static HAD_RUNTIME_ERROR: AtomicBool = AtomicBool::new(false);
@@ -67,6 +67,20 @@ impl RuntimeError {
 impl fmt::Display for RuntimeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Runtime error: {}", self.message)
+    }
+}
+
+impl<T> From<PoisonError<T>> for RuntimeError {
+    fn from(err: PoisonError<T>) -> Self {
+        RuntimeError::new(
+            Token { 
+                token_type: TokenType::EOF, 
+                lexeme: "".to_owned(),
+                line: 0,
+                literal: Object::Nil
+            },
+            format!("mutex poisoned: {:?}", err),
+        )
     }
 }
 

@@ -1,10 +1,10 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::{Arc, Mutex}};
 
 use crate::{error::RuntimeError, object::Object, token::Token};
 
 #[derive(Clone)]
 pub struct Environment {
-	enclosing: Option<Box<Environment>>,
+	enclosing: Option<Arc<Mutex<Environment>>>,
 	values: HashMap<String, Object>
 }
 
@@ -16,25 +16,25 @@ impl Environment {
 		}
 	}
 
-	pub fn new(enclosing: Environment) -> Self {
+	pub fn new(enclosing: Arc<Mutex<Environment>>) -> Self {
 		Self { 
-			enclosing: Some(Box::new(enclosing)),
+			enclosing: Some(enclosing),
 			values: HashMap::new() 
 		}
 	}
 
-	pub fn define(&mut self, name: String, value: Object) {
-		self.values.insert(name, value);
+	pub fn define<S: Into<String>>(&mut self, name: S, value: Object) {
+		self.values.insert(name.into(), value);
 	}
 
-	pub fn assign(&mut self, name: Token, value: Object) -> Result<(), RuntimeError>{
+	pub fn assign(&mut self, name: &Token, value: Object) -> Result<(), RuntimeError>{
 		if self.values.contains_key(&name.lexeme) {
 			self.values.insert(name.lexeme.clone(), value);
 			return Ok(())
 		}
 
-		if let Some(enclosing) = &mut self.enclosing {
-			return enclosing.assign(name, value)
+		if let Some(enclosing) = &self.enclosing {
+			return enclosing.lock().unwrap().assign(name, value)
 		}
 
 		Err(RuntimeError::new(
@@ -43,12 +43,12 @@ impl Environment {
 		))
 	}
 
-	pub fn get(&self, name: Token) -> Result<Object, RuntimeError> {
+	pub fn get(&self, name: &Token) -> Result<Object, RuntimeError> {
 		match self.values.get(&name.lexeme) {
 			Some(value) => Ok(value.clone()),
 			None => {
 				if let Some(enclosing) = &self.enclosing {
-					return enclosing.get(name)
+					return enclosing.lock().unwrap().get(name)
 				}
 
 				Err(RuntimeError::new(
@@ -58,8 +58,4 @@ impl Environment {
 			}
 		}
 	}
-
-	pub fn take_enclosing(&mut self) -> Option<Environment> {
-        self.enclosing.take().map(|boxed| *boxed)
-    }
 }

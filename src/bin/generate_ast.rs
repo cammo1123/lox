@@ -11,7 +11,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     generate(out, "expr", &vec![
         "Assign   : Token name, Expr value",
-        "Binary   : Expr left, Token operator, Expr right",
+        "Binary   : Expr left, Token operator, Expr right",      
+        "Call     : Expr callee, Token paren, Vec<Expr> arguments",
         "Grouping : Expr expression",
         "Literal  : Object value",
         "Logical  : Expr left, Token operator, Expr right",
