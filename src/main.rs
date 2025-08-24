@@ -2,9 +2,10 @@ use std::io::{self, Write};
 use std::sync::{LazyLock, Mutex};
 use std::{env, fs::File, io::Read, process::exit};
 
-use crafting_interpreters::error::{had_error, had_runtime_error};
+use crafting_interpreters::error::{had_error, had_runtime_error, runtime_error};
 use crafting_interpreters::interpreter::Interpreter;
 use crafting_interpreters::parser::Parser;
+use crafting_interpreters::resolver::Resolver;
 use crafting_interpreters::scanner::Scanner;
 use crafting_interpreters::token::Token;
 
@@ -71,6 +72,15 @@ fn run(source: &str) -> Result<(), Box<dyn std::error::Error>> {
 
     let mut interpreter = INTERPRETER.lock()?;
     if had_error() {
+        return Ok(())
+    }
+
+    let mut resolver = Resolver::new(&mut interpreter);
+    if let Err(err) = resolver.resolve_statements(&statements) {
+        runtime_error(err);
+    }
+
+    if had_runtime_error() {
         return Ok(())
     }
 

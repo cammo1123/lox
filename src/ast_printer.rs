@@ -1,7 +1,5 @@
 use crate::error::InterpreterError;
-use crate::expr::{Expr, Visitor};
-use crate::object::Object;
-use crate::token::Token;
+use crate::expr::{Expr, ExprAssign, ExprBinary, ExprCall, ExprGrouping, ExprLiteral, ExprLogical, ExprNil, ExprUnary, ExprVariable, Visitor};
 use std::fmt::Write;
 
 pub struct AstPrinter;
@@ -29,40 +27,40 @@ impl AstPrinter {
 }
 
 impl Visitor<String> for AstPrinter {
-    fn visit_binary_expr(&mut self, left: &Expr, operator: &Token, right: &Expr) -> Result<String, InterpreterError> {
-        self.parenthesize(&operator.lexeme, &[left, right])
+    fn visit_binary_expr(&mut self, expr: &ExprBinary) -> Result<String, InterpreterError> {
+        self.parenthesize(&expr.operator.lexeme, &[&expr.left, &expr.right])
     }
 
-    fn visit_grouping_expr(&mut self, expression: &Expr) -> Result<String, InterpreterError> {
-        self.parenthesize("group", &[expression])
+    fn visit_grouping_expr(&mut self, expr: &ExprGrouping) -> Result<String, InterpreterError> {
+        self.parenthesize("group", &[&expr.expression])
     }
 
-    fn visit_literal_expr(&mut self, value: &Object) -> Result<String, InterpreterError> {
-        Ok(value.to_string())
+    fn visit_literal_expr(&mut self, expr: &ExprLiteral) -> Result<String, InterpreterError> {
+        Ok(expr.value.to_string())
     }
 
-    fn visit_unary_expr(&mut self, operator: &Token, right: &Expr) -> Result<String, InterpreterError> {
-        self.parenthesize(&operator.lexeme, &[right])
+    fn visit_unary_expr(&mut self, expr: &ExprUnary) -> Result<String, InterpreterError> {
+        self.parenthesize(&expr.operator.lexeme, &[&expr.right])
     }
 
-    fn visit_variable_expr(&mut self, name: &Token) -> Result<String, InterpreterError> {
-        Ok(name.lexeme.clone())
+    fn visit_variable_expr(&mut self, expr: &ExprVariable) -> Result<String, InterpreterError> {
+        Ok(expr.name.lexeme.clone())
     }
 
-    fn visit_assign_expr(&mut self, name: &Token, value: &Expr) -> Result<String, InterpreterError> {
-        let value_str = value.accept(self)?;
-        Ok(format!("(assign {} {})", name.lexeme, value_str))
+    fn visit_assign_expr(&mut self, expr: &ExprAssign) -> Result<String, InterpreterError> {
+        let value_str = expr.value.accept(self)?;
+        Ok(format!("(assign {} {})", expr.name.lexeme, value_str))
     }
 
-    fn visit_null_expr(&mut self) -> Result<String, InterpreterError> {
+    fn visit_null_expr(&mut self, _expr: &ExprNil) -> Result<String, InterpreterError> {
         Ok("nil".to_string())
     }
     
-    fn visit_logical_expr( &mut self, left: &Expr, operator: &Token, right: &Expr) -> Result<String, InterpreterError> {
-        self.parenthesize(&operator.lexeme, &[left, right])
+    fn visit_logical_expr(&mut self, expr: &ExprLogical) -> Result<String, InterpreterError> {
+        self.parenthesize(&expr.operator.lexeme, &[&expr.left, &expr.right])
     }
     
-    fn visit_call_expr(&mut self, callee: &Expr, paren: &Token, arguments: &Vec<Expr>) -> Result<String, InterpreterError> {
-        Ok(format!("(call {:?} {} {:?})", callee, paren, arguments))
+    fn visit_call_expr(&mut self, expr: &ExprCall) -> Result<String, InterpreterError> {
+        Ok(format!("(call {:?} {} {:?})", expr.callee, expr.paren, expr.arguments))
     }
 }

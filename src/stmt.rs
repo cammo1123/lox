@@ -2,43 +2,132 @@
 use crate::{error::InterpreterError, expr::Expr, token::Token};
 use std::fmt::Debug;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
+pub struct StmtBlock {
+    pub statements: Vec<Stmt>,
+}
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
+pub struct StmtExpression {
+    pub expression: Expr,
+}
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
+pub struct StmtFunction {
+    pub name: Token,
+    pub params: Vec<Token>,
+    pub body: Vec<Stmt>,
+}
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
+pub struct StmtIf {
+    pub condition: Expr,
+    pub then_branch: Box<Stmt>,
+    pub else_branch: Box<Stmt>,
+}
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
+pub struct StmtPrint {
+    pub expression: Expr,
+}
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
+pub struct StmtReturn {
+    pub keyword: Token,
+    pub value: Expr,
+}
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
+pub struct StmtVar {
+    pub name: Token,
+    pub initializer: Expr,
+}
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
+pub struct StmtWhile {
+    pub condition: Expr,
+    pub body: Box<Stmt>,
+}
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
+pub struct StmtNil {}
+
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
 pub enum Stmt {
-    Nil,
-    Block { statements: Vec<Stmt> },
-    Expression { expression: Expr },
-    Function { name: Token, params: Vec<Token>, body: Vec<Stmt> },
-    If { condition: Expr, then_branch: Box<Stmt>, else_branch: Box<Stmt> },
-    Print { expression: Expr },
-    Return { keyword: Token, value: Expr },
-    Var { name: Token, initializer: Expr },
-    While { condition: Expr, body: Box<Stmt> },
+    Nil(StmtNil),
+    Block(StmtBlock),
+    Expression(StmtExpression),
+    Function(StmtFunction),
+    If(StmtIf),
+    Print(StmtPrint),
+    Return(StmtReturn),
+    Var(StmtVar),
+    While(StmtWhile),
+}
+
+// convert variant structs into the enum with `.into()`
+impl From<StmtNil> for Stmt {
+    fn from(val: StmtNil) -> Self {
+        Stmt::Nil(val)
+    }
+}
+impl From<StmtBlock> for Stmt {
+    fn from(val: StmtBlock) -> Self {
+        Stmt::Block(val)
+    }
+}
+impl From<StmtExpression> for Stmt {
+    fn from(val: StmtExpression) -> Self {
+        Stmt::Expression(val)
+    }
+}
+impl From<StmtFunction> for Stmt {
+    fn from(val: StmtFunction) -> Self {
+        Stmt::Function(val)
+    }
+}
+impl From<StmtIf> for Stmt {
+    fn from(val: StmtIf) -> Self {
+        Stmt::If(val)
+    }
+}
+impl From<StmtPrint> for Stmt {
+    fn from(val: StmtPrint) -> Self {
+        Stmt::Print(val)
+    }
+}
+impl From<StmtReturn> for Stmt {
+    fn from(val: StmtReturn) -> Self {
+        Stmt::Return(val)
+    }
+}
+impl From<StmtVar> for Stmt {
+    fn from(val: StmtVar) -> Self {
+        Stmt::Var(val)
+    }
+}
+impl From<StmtWhile> for Stmt {
+    fn from(val: StmtWhile) -> Self {
+        Stmt::While(val)
+    }
 }
 
 pub trait Visitor<T> {
-    fn visit_null_stmt(&mut self) -> Result<T, InterpreterError>;
-    fn visit_block_stmt(&mut self, statements: &Vec<Stmt>) -> Result<T, InterpreterError>;
-    fn visit_expression_stmt(&mut self, expression: &Expr) -> Result<T, InterpreterError>;
-    fn visit_function_stmt(&mut self, name: &Token, params: &Vec<Token>, body: &Vec<Stmt>) -> Result<T, InterpreterError>;
-    fn visit_if_stmt(&mut self, condition: &Expr, then_branch: &Stmt, else_branch: &Stmt) -> Result<T, InterpreterError>;
-    fn visit_print_stmt(&mut self, expression: &Expr) -> Result<T, InterpreterError>;
-    fn visit_return_stmt(&mut self, keyword: &Token, value: &Expr) -> Result<T, InterpreterError>;
-    fn visit_var_stmt(&mut self, name: &Token, initializer: &Expr) -> Result<T, InterpreterError>;
-    fn visit_while_stmt(&mut self, condition: &Expr, body: &Stmt) -> Result<T, InterpreterError>;
+    fn visit_null_stmt(&mut self, expr: &StmtNil) -> Result<T, InterpreterError>;
+    fn visit_block_stmt(&mut self, expr: &StmtBlock) -> Result<T, InterpreterError>;
+    fn visit_expression_stmt(&mut self, expr: &StmtExpression) -> Result<T, InterpreterError>;
+    fn visit_function_stmt(&mut self, expr: &StmtFunction) -> Result<T, InterpreterError>;
+    fn visit_if_stmt(&mut self, expr: &StmtIf) -> Result<T, InterpreterError>;
+    fn visit_print_stmt(&mut self, expr: &StmtPrint) -> Result<T, InterpreterError>;
+    fn visit_return_stmt(&mut self, expr: &StmtReturn) -> Result<T, InterpreterError>;
+    fn visit_var_stmt(&mut self, expr: &StmtVar) -> Result<T, InterpreterError>;
+    fn visit_while_stmt(&mut self, expr: &StmtWhile) -> Result<T, InterpreterError>;
 }
 
 impl Stmt {
     pub fn accept<T, V: Visitor<T>>(&self, visitor: &mut V) -> Result<T, InterpreterError> {
         match self {
-            Stmt::Nil => visitor.visit_null_stmt(),
-            Stmt::Block { statements } => visitor.visit_block_stmt(&statements),
-            Stmt::Expression { expression } => visitor.visit_expression_stmt(&expression),
-            Stmt::Function { name, params, body } => visitor.visit_function_stmt(&name, &params, &body),
-            Stmt::If { condition, then_branch, else_branch } => visitor.visit_if_stmt(&condition, &*then_branch, &*else_branch),
-            Stmt::Print { expression } => visitor.visit_print_stmt(&expression),
-            Stmt::Return { keyword, value } => visitor.visit_return_stmt(&keyword, &value),
-            Stmt::Var { name, initializer } => visitor.visit_var_stmt(&name, &initializer),
-            Stmt::While { condition, body } => visitor.visit_while_stmt(&condition, &*body),
+            Stmt::Nil(nil) => visitor.visit_null_stmt(nil),
+            Stmt::Block(inner) => visitor.visit_block_stmt(inner),
+            Stmt::Expression(inner) => visitor.visit_expression_stmt(inner),
+            Stmt::Function(inner) => visitor.visit_function_stmt(inner),
+            Stmt::If(inner) => visitor.visit_if_stmt(inner),
+            Stmt::Print(inner) => visitor.visit_print_stmt(inner),
+            Stmt::Return(inner) => visitor.visit_return_stmt(inner),
+            Stmt::Var(inner) => visitor.visit_var_stmt(inner),
+            Stmt::While(inner) => visitor.visit_while_stmt(inner),
         }
     }
 }

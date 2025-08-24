@@ -135,59 +135,80 @@ fn generate(
     writeln!(f, "use std::fmt::Debug;")?;
     writeln!(f)?;
 
-    // Enum
-    writeln!(f, "#[derive(Debug, Clone)]")?;
-    writeln!(f, "pub enum {} {{", base_type)?;
-    writeln!(f, "    Nil,")?;
+    // Variant struct definitions
+    // Create a struct for Nil and for each variant; fields are `pub`.
     for t in types {
         let parts: Vec<&str> = t.split(':').collect();
         let name = parts[0].trim();
         let fields = parts[1].trim();
-
-        write!(f, "    {} {{ ", name)?;
-        let field_list: Vec<&str> = fields.split(',').map(|s| s.trim()).collect();
-        for (i, field) in field_list.iter().enumerate() {
-            let mut it = field.split_whitespace();
-            let ty = it.next().unwrap();
-            let nm = it.next().unwrap();
-            let rust_ty = if ty == base_type {
-                format!("Box<{}>", base_type)
-            } else {
-                ty.to_string()
-            };
-            write!(f, "{}: {}", nm, rust_ty)?;
-            if i + 1 != field_list.len() {
-                write!(f, ", ")?;
+        let struct_name = format!("{}{}", base_type, name);
+        // If there are no fields (shouldn't happen with current inputs), emit empty braced struct.
+        let field_list: Vec<&str> = fields.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+        writeln!(f, "#[derive(Debug, Clone, Eq, Hash, PartialEq)]")?;
+        writeln!(f, "pub struct {} {{", struct_name)?;
+        if field_list.is_empty() {
+            // empty struct body
+        } else {
+            for field in &field_list {
+                let mut it = field.split_whitespace();
+                let ty = it.next().unwrap();
+                let nm = it.next().unwrap();
+                let rust_ty = if ty == base_type {
+                    format!("Box<{}>", base_type)
+                } else {
+                    ty.to_string()
+                };
+                writeln!(f, "    pub {}: {},", nm, rust_ty)?;
             }
         }
-        writeln!(f, " }},")?;
+        writeln!(f, "}}")?;
+    }
+
+    writeln!(f, "#[derive(Debug, Clone, Eq, Hash, PartialEq)]")?;
+    writeln!(f, "pub struct {}Nil {{}}", base_type)?;
+    writeln!(f)?;
+
+    writeln!(f, "#[derive(Debug, Clone, Eq, Hash, PartialEq)]")?;
+    writeln!(f, "pub enum {} {{", base_type)?;
+    writeln!(f, "    Nil({}Nil),", base_type)?;
+    for t in types {
+        let parts: Vec<&str> = t.split(':').collect();
+        let name = parts[0].trim();
+        let struct_name = format!("{}{}", base_type, name);
+        writeln!(f, "    {}({}),", name, struct_name)?;
     }
     writeln!(f, "}}")?;
+    writeln!(f)?;
+
+    // impl From<VariantStruct> for Base so `.into()` works
+    writeln!(f, "// convert variant structs into the enum with `.into()`")?;
+    writeln!(f, "impl From<{}Nil> for {} {{", base_type, base_type)?;
+    writeln!(f, "    fn from(val: {}Nil) -> Self {{", base_type)?;
+    writeln!(f, "        {}::Nil(val)", base_type)?;
+    writeln!(f, "    }}")?;
+    writeln!(f, "}}")?;
+    for t in types {
+        let parts: Vec<&str> = t.split(':').collect();
+        let name = parts[0].trim();
+        let struct_name = format!("{}{}", base_type, name);
+        writeln!(f, "impl From<{}> for {} {{", struct_name, base_type)?;
+        writeln!(f, "    fn from(val: {}) -> Self {{", struct_name)?;
+        writeln!(f, "        {}::{}(val)", base_type, name)?;
+        writeln!(f, "    }}")?;
+        writeln!(f, "}}")?;
+    }
     writeln!(f)?;
 
     // Visitor trait
     let base_lower = base_type.to_lowercase();
     writeln!(f, "pub trait Visitor<T> {{")?;
-    writeln!(f, "    fn visit_null_{}(&mut self) -> Result<T, InterpreterError>;", base_lower)?;
+    writeln!(f, "    fn visit_null_{}(&mut self, expr: &{}Nil) -> Result<T, InterpreterError>;", base_lower, base_type)?;
     for t in types {
         let parts: Vec<&str> = t.split(':').collect();
         let name = parts[0].trim();
-        let fields = parts[1].trim();
+        let struct_name = format!("{}{}", base_type, name);
         let fn_name = format!("visit_{}_{}", name.to_lowercase(), base_lower);
-        write!(f, "    fn {}(&mut self", fn_name)?;
-        let field_list: Vec<&str> = fields.split(',').map(|s| s.trim()).collect();
-        for field in field_list {
-            let mut it = field.split_whitespace();
-            let ty = it.next().unwrap();
-            let nm = it.next().unwrap();
-            let param_ty = if ty == base_type {
-                format!("&{}", base_type)
-            } else {
-                format!("&{}", ty)
-            };
-            write!(f, ", {}: {}", nm, param_ty)?;
-        }
-        writeln!(f, ") -> Result<T, InterpreterError>;")?;
+        writeln!(f, "    fn {}(&mut self, expr: &{}) -> Result<T, InterpreterError>;", fn_name, struct_name)?;
     }
     writeln!(f, "}}")?;
     writeln!(f)?;
@@ -202,39 +223,20 @@ fn generate(
     writeln!(f, "        match self {{")?;
     writeln!(
         f,
-        "            {}::Nil => visitor.visit_null_{}(),",
+        "            {}::Nil(nil) => visitor.visit_null_{}(nil),",
         base_type, base_lower
     )?;
     for t in types {
         let parts: Vec<&str> = t.split(':').collect();
         let name = parts[0].trim();
-        let fields = parts[1].trim();
-        write!(f, "            {}::{} {{ ", base_type, name)?;
-        let field_list: Vec<&str> = fields.split(',').map(|s| s.trim()).collect();
-        for (i, field) in field_list.iter().enumerate() {
-            let nm = field.split_whitespace().nth(1).unwrap();
-            write!(f, "{}", nm)?;
-            if i + 1 != field_list.len() {
-                write!(f, ", ")?;
-            }
-        }
-        write!(f, " }} => ")?;
-        let fn_name = format!("visit_{}_{}", name.to_lowercase(), base_lower);
-        write!(f, "visitor.{}(", fn_name)?;
-        for (i, field) in field_list.iter().enumerate() {
-            let mut it = field.split_whitespace();
-            let ty = it.next().unwrap();
-            let nm = it.next().unwrap();
-            if ty == base_type {
-                write!(f, "&*{}", nm)?;
-            } else {
-                write!(f, "&{}", nm)?;
-            }
-            if i + 1 != field_list.len() {
-                write!(f, ", ")?;
-            }
-        }
-        writeln!(f, "),")?;
+        writeln!(
+            f,
+            "            {}::{}(inner) => visitor.visit_{}_{}(inner),",
+            base_type,
+            name,
+            name.to_lowercase(),
+            base_lower
+        )?;
     }
     writeln!(f, "        }}")?;
     writeln!(f, "    }}")?;

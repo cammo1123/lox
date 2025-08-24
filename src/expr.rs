@@ -2,43 +2,133 @@
 use crate::{error::InterpreterError, object::Object, token::Token};
 use std::fmt::Debug;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
+pub struct ExprAssign {
+    pub name: Token,
+    pub value: Box<Expr>,
+}
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
+pub struct ExprBinary {
+    pub left: Box<Expr>,
+    pub operator: Token,
+    pub right: Box<Expr>,
+}
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
+pub struct ExprCall {
+    pub callee: Box<Expr>,
+    pub paren: Token,
+    pub arguments: Vec<Expr>,
+}
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
+pub struct ExprGrouping {
+    pub expression: Box<Expr>,
+}
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
+pub struct ExprLiteral {
+    pub value: Object,
+}
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
+pub struct ExprLogical {
+    pub left: Box<Expr>,
+    pub operator: Token,
+    pub right: Box<Expr>,
+}
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
+pub struct ExprUnary {
+    pub operator: Token,
+    pub right: Box<Expr>,
+}
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
+pub struct ExprVariable {
+    pub name: Token,
+}
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
+pub struct ExprNil {}
+
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
 pub enum Expr {
-    Nil,
-    Assign { name: Token, value: Box<Expr> },
-    Binary { left: Box<Expr>, operator: Token, right: Box<Expr> },
-    Call { callee: Box<Expr>, paren: Token, arguments: Vec<Expr> },
-    Grouping { expression: Box<Expr> },
-    Literal { value: Object },
-    Logical { left: Box<Expr>, operator: Token, right: Box<Expr> },
-    Unary { operator: Token, right: Box<Expr> },
-    Variable { name: Token },
+    Nil(ExprNil),
+    Assign(ExprAssign),
+    Binary(ExprBinary),
+    Call(ExprCall),
+    Grouping(ExprGrouping),
+    Literal(ExprLiteral),
+    Logical(ExprLogical),
+    Unary(ExprUnary),
+    Variable(ExprVariable),
+}
+
+// convert variant structs into the enum with `.into()`
+impl From<ExprNil> for Expr {
+    fn from(val: ExprNil) -> Self {
+        Expr::Nil(val)
+    }
+}
+impl From<ExprAssign> for Expr {
+    fn from(val: ExprAssign) -> Self {
+        Expr::Assign(val)
+    }
+}
+impl From<ExprBinary> for Expr {
+    fn from(val: ExprBinary) -> Self {
+        Expr::Binary(val)
+    }
+}
+impl From<ExprCall> for Expr {
+    fn from(val: ExprCall) -> Self {
+        Expr::Call(val)
+    }
+}
+impl From<ExprGrouping> for Expr {
+    fn from(val: ExprGrouping) -> Self {
+        Expr::Grouping(val)
+    }
+}
+impl From<ExprLiteral> for Expr {
+    fn from(val: ExprLiteral) -> Self {
+        Expr::Literal(val)
+    }
+}
+impl From<ExprLogical> for Expr {
+    fn from(val: ExprLogical) -> Self {
+        Expr::Logical(val)
+    }
+}
+impl From<ExprUnary> for Expr {
+    fn from(val: ExprUnary) -> Self {
+        Expr::Unary(val)
+    }
+}
+impl From<ExprVariable> for Expr {
+    fn from(val: ExprVariable) -> Self {
+        Expr::Variable(val)
+    }
 }
 
 pub trait Visitor<T> {
-    fn visit_null_expr(&mut self) -> Result<T, InterpreterError>;
-    fn visit_assign_expr(&mut self, name: &Token, value: &Expr) -> Result<T, InterpreterError>;
-    fn visit_binary_expr(&mut self, left: &Expr, operator: &Token, right: &Expr) -> Result<T, InterpreterError>;
-    fn visit_call_expr(&mut self, callee: &Expr, paren: &Token, arguments: &Vec<Expr>) -> Result<T, InterpreterError>;
-    fn visit_grouping_expr(&mut self, expression: &Expr) -> Result<T, InterpreterError>;
-    fn visit_literal_expr(&mut self, value: &Object) -> Result<T, InterpreterError>;
-    fn visit_logical_expr(&mut self, left: &Expr, operator: &Token, right: &Expr) -> Result<T, InterpreterError>;
-    fn visit_unary_expr(&mut self, operator: &Token, right: &Expr) -> Result<T, InterpreterError>;
-    fn visit_variable_expr(&mut self, name: &Token) -> Result<T, InterpreterError>;
+    fn visit_null_expr(&mut self, expr: &ExprNil) -> Result<T, InterpreterError>;
+    fn visit_assign_expr(&mut self, expr: &ExprAssign) -> Result<T, InterpreterError>;
+    fn visit_binary_expr(&mut self, expr: &ExprBinary) -> Result<T, InterpreterError>;
+    fn visit_call_expr(&mut self, expr: &ExprCall) -> Result<T, InterpreterError>;
+    fn visit_grouping_expr(&mut self, expr: &ExprGrouping) -> Result<T, InterpreterError>;
+    fn visit_literal_expr(&mut self, expr: &ExprLiteral) -> Result<T, InterpreterError>;
+    fn visit_logical_expr(&mut self, expr: &ExprLogical) -> Result<T, InterpreterError>;
+    fn visit_unary_expr(&mut self, expr: &ExprUnary) -> Result<T, InterpreterError>;
+    fn visit_variable_expr(&mut self, expr: &ExprVariable) -> Result<T, InterpreterError>;
 }
 
 impl Expr {
     pub fn accept<T, V: Visitor<T>>(&self, visitor: &mut V) -> Result<T, InterpreterError> {
         match self {
-            Expr::Nil => visitor.visit_null_expr(),
-            Expr::Assign { name, value } => visitor.visit_assign_expr(&name, &*value),
-            Expr::Binary { left, operator, right } => visitor.visit_binary_expr(&*left, &operator, &*right),
-            Expr::Call { callee, paren, arguments } => visitor.visit_call_expr(&*callee, &paren, &arguments),
-            Expr::Grouping { expression } => visitor.visit_grouping_expr(&*expression),
-            Expr::Literal { value } => visitor.visit_literal_expr(&value),
-            Expr::Logical { left, operator, right } => visitor.visit_logical_expr(&*left, &operator, &*right),
-            Expr::Unary { operator, right } => visitor.visit_unary_expr(&operator, &*right),
-            Expr::Variable { name } => visitor.visit_variable_expr(&name),
+            Expr::Nil(nil) => visitor.visit_null_expr(nil),
+            Expr::Assign(inner) => visitor.visit_assign_expr(inner),
+            Expr::Binary(inner) => visitor.visit_binary_expr(inner),
+            Expr::Call(inner) => visitor.visit_call_expr(inner),
+            Expr::Grouping(inner) => visitor.visit_grouping_expr(inner),
+            Expr::Literal(inner) => visitor.visit_literal_expr(inner),
+            Expr::Logical(inner) => visitor.visit_logical_expr(inner),
+            Expr::Unary(inner) => visitor.visit_unary_expr(inner),
+            Expr::Variable(inner) => visitor.visit_variable_expr(inner),
         }
     }
 }

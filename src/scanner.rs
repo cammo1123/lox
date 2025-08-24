@@ -228,7 +228,7 @@ impl Scanner {
         let value = &self.source[self.start..self.current];
 		self.add_token_a(
 			TokenType::Number,
-			Object::Number(value.parse::<f64>().expect("Invalid number literal")),
+			Object::Number(value.parse::<f64>().expect("Invalid number literal").into()),
 		);
 	}
 

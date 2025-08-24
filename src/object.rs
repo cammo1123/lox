@@ -1,11 +1,12 @@
-use std::{fmt, sync::Arc};
+use std::{fmt, hash::{Hash, Hasher}, sync::Arc};
+use ordered_float::OrderedFloat;
 
 use crate::{error::InterpreterError, interpreter::Interpreter};
 
 #[derive(Clone)]
 pub enum Object {
     String(String),
-    Number(f64),
+    Number(OrderedFloat<f64>),
     Bool(bool),
     Callable(Arc<dyn Callable + Send + Sync>),
     Nil,
@@ -48,6 +49,28 @@ impl PartialEq for Object {
             (Nil, Nil) => true,
             (Callable(a), Callable(b)) => Arc::ptr_eq(a, b),
             _ => false,
+        }
+    }
+}
+
+// If you want Eq (empty marker), it's OK now because OrderedFloat implements Eq
+impl Eq for Object {}
+
+impl Hash for Object {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        use Object::*;
+        // include a discriminant tag so different variants don't collide
+        std::mem::discriminant(self).hash(state);
+        match self {
+            String(s) => s.hash(state),
+            Number(n) => n.hash(state),
+            Bool(b) => b.hash(state),
+            Callable(a) => {
+                // hash the raw pointer address to be consistent with PartialEq (ptr equality)
+                let ptr = Arc::as_ptr(a) as *const ();
+                (ptr as usize).hash(state);
+            }
+            Nil => (),
         }
     }
 }

@@ -2,7 +2,7 @@ use std::fmt;
 
 use crate::object::Object;
 
-#[derive(Debug, Clone, PartialEq, Eq, Copy)]
+#[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
 pub enum TokenType {
     // Single-character tokens.
     LeftParen, RightParen, LeftBrace, RightBrace,
@@ -24,7 +24,7 @@ pub enum TokenType {
     EOF
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
 pub struct Token {
     pub token_type: TokenType,
     pub lexeme: String,
@@ -39,6 +39,15 @@ impl Token {
             lexeme: lexeme.into(),
             literal,
             line,
+        }
+    }
+
+    pub fn dummy() -> Self {
+        Self {
+            token_type: TokenType::EOF,
+            lexeme: "".to_owned(),
+            literal: Object::Nil,
+            line: 0,
         }
     }
 }
