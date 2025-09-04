@@ -1,11 +1,8 @@
-use std::string::ParseError;
-
-use crate::{error::{RLoxError, TokenError}, token::{Token, TokenType}};
-
+use crate::{error::TokenError, token::{Token, TokenType}};
 
 #[derive(Debug)]
 pub struct Scanner<'src> {
-    source: &'src str,
+    pub source: &'src str,
     start: usize,
     current: usize,
     line: usize,

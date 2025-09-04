@@ -9,7 +9,7 @@ use crate::error::{RLoxError, RuntimeError};
 use crate::value::Value;
 
 pub struct VM {
-    chunk: Rc<Chunk>,
+    chunk: Rc<RefCell<Chunk>>,
     code: Rc<RefCell<Vec<u8>>>,
     ip: usize,
 	stack: Vec<Value>,
@@ -18,25 +18,27 @@ pub struct VM {
 
 impl VM {
 	pub fn interpret(source: &str) -> Result<(), RLoxError> {
-		let chunk = Rc::new(Compiler::compile(source)?);
+        let mut compiler = Compiler::new(source);
+        let _res = compiler.compile()?;
+        let chunk = compiler.current_chunk;
 
-		let mut vm = VM {
-			chunk: Rc::clone(&chunk),
-			code: Rc::clone(&chunk.code),
-			ip: 0,
-			stack: Vec::with_capacity(256),
-			instruction_line: 0,
-		};
+        let mut vm = VM {
+            chunk: Rc::clone(&chunk),
+            code: Rc::clone(&chunk.borrow().code),
+            ip: 0,
+            stack: Vec::with_capacity(256),
+            instruction_line: 0,
+        };
 
-		vm.run()
-	}
+        vm.run()
+    }
 
     fn run(&mut self) -> Result<(), RLoxError> {
         loop {
 			#[cfg(feature = "debug_trace_execution")]{
 				use crate::debug::Disassemble;
 				println!("{:?}", self.stack);
-				Disassemble::instruction(&self.chunk, self.ip)?;
+				Disassemble::instruction(&*self.chunk.borrow(), self.ip)?;
 			}
 
 			self.instruction_line = self.current_line().unwrap_or(0);
@@ -119,7 +121,8 @@ impl VM {
 
 	fn read_constant(&mut self) -> Result<Value, RLoxError>{
 		let position = self.read_byte()?;
-		let constant = self.chunk.constants.get(position as usize)
+		let chunk = self.chunk.borrow();
+		let constant = chunk.constants.get(position as usize)
 			.ok_or((|| {
 				let line = self.current_line().unwrap_or(0);
 				return RuntimeError::new(line, "Failed to get constant")
@@ -129,7 +132,8 @@ impl VM {
 	}
 
 	fn current_line(&self) -> Option<usize> {
-		self.chunk.lines.get(self.ip).copied()
+		let chunk = self.chunk.borrow();
+		chunk.lines.get(self.ip).copied()
 	}
 
 	fn pop(&mut self) -> Result<Value, RuntimeError> {

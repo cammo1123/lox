@@ -6,3 +6,4 @@ pub mod vm;
 pub mod compiler;
 pub mod scanner;
 pub mod token;
+pub mod parser;

@@ -1,5 +1,4 @@
 use std::io::{self, Write};
-use std::sync::{LazyLock, Mutex};
 use std::{env, fs::File, io::Read, process::exit};
 
 use rlox::error::RLoxError;

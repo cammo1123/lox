@@ -35,7 +35,7 @@ impl Chunk {
 		assert_eq!(self.lines.len(), self.code.borrow().len());
 	}
 
-	pub fn add_constant(&mut self, value: Rc<Value>) -> usize{
+	pub fn add_constant(&mut self, value: Rc<Value>) -> usize {
 		self.constants.push(value);
 		self.constants.len() - 1
 	}
