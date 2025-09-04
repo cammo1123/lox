@@ -1,114 +1,31 @@
-use std::io::{self, Write};
-use std::sync::{LazyLock, Mutex};
-use std::{env, fs::File, io::Read, process::exit};
+use std::{rc::Rc};
 
-use crafting_interpreters::error::{had_error, had_runtime_error, runtime_error};
-use crafting_interpreters::interpreter::Interpreter;
-use crafting_interpreters::parser::Parser;
-use crafting_interpreters::resolver::Resolver;
-use crafting_interpreters::scanner::Scanner;
-use crafting_interpreters::token::Token;
+use rlox::{chunk::{Chunk, OpCode}, value::Value, vm::VM};
 
-static INTERPRETER: LazyLock<Mutex<Interpreter>> = LazyLock::new(|| Mutex::new(Interpreter::new()));
+pub fn main() {
+	let mut chunk = Chunk::new();
 
-pub fn run_file(path: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let mut file = File::open(path)?;
-    let mut contents = String::new();
-    file.read_to_string(&mut contents)?;
-    run(&contents)?;
+	let mut constant = chunk.add_constant(Rc::new(Value::Number(1.2)));
+	chunk.write(OpCode::OpConstant as u8, 123);
+	chunk.write(constant as u8, 123);
 
-    if had_error() {
-        return Err(Box::new(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("Compilation errors in file '{}'", path)
-        )));
-    }
+	constant = chunk.add_constant(Rc::new(Value::Number(3.4)));
+	chunk.write(OpCode::OpConstant as u8, 123);
+	chunk.write(constant as u8 , 123);
 
-    if had_runtime_error() {
-        return Err(Box::new(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("Runtime error while running '{}'", path)
-        )));
-    }
+	chunk.write(OpCode::OpAdd as u8, 123);
 
-    Ok(())
-}
+	constant = chunk.add_constant(Rc::new(Value::Number(5.6)));
+	chunk.write(OpCode::OpConstant as u8, 123);
+	chunk.write(constant as u8, 123);
 
-pub fn run_prompt() -> Result<(), Box<dyn std::error::Error>> {
-    let stdin = io::stdin();
-    let mut stdout = io::stdout();
-    
-    loop {
-        print!("> ");
-        stdout.flush()?;
+	chunk.write(OpCode::OpDivide as u8, 123);
+	chunk.write(OpCode::OpNegate as u8, 123);
 
-        let mut line = String::new();
-        let bytes = stdin.read_line(&mut line)?;
+	chunk.write(OpCode::OpReturn as u8, 123);
 
-        if bytes == 0 {
-            break;
-        }
-
-        let line = line.trim_end();
-        if line == "exit" || line == "quit" {
-            break;
-        }
-
-        if let Err(e) = run(line) {
-            eprintln!("Error {}", e);
-        }
-
-    }
-    
-    Ok(())
-}
-
-fn run(source: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let scanner = Scanner::new(source);
-    let tokens: Vec<Token> = scanner.scan_tokens();
-    let mut parser = Parser::new(&tokens);
-
-    let statements = parser.parse();
-
-    let mut interpreter = INTERPRETER.lock()?;
-    if had_error() {
-        return Ok(())
-    }
-
-    let mut resolver = Resolver::new(&mut interpreter);
-    if let Err(err) = resolver.resolve_statements(&statements) {
-        runtime_error(err);
-    }
-
-    if had_runtime_error() {
-        return Ok(())
-    }
-
-    interpreter.interpret(&statements);
-    Ok(())
-}
-
-fn main() {
-    let args: Vec<String> = env::args().collect();
-
-    match args.len() {
-        1 => {
-            if let Err(e) = run_prompt() {
-                eprintln!("REPL Error: {}", e);
-                exit(70);
-            }
-        }
-
-        2 => {
-            if let Err(e) = run_file(&args[1]) {
-                eprintln!("Error running file: {}", e);
-                exit(65);
-            }
-        }
-
-        _ => {
-            println!("Usage: jlox [script]");
-            exit(64);
-        }
-    }
+	let mut vm = VM::new(Rc::new(chunk));
+	if let Err(val) = vm.interpret() {
+		println!("{}", val)
+	}
 }

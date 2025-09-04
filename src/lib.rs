@@ -1,12 +1,5 @@
-pub mod ast_printer;
-pub mod environment;
+pub mod value;
+pub mod chunk;
+pub mod debug;
 pub mod error;
-pub mod expr;
-pub mod interpreter;
-pub mod lox_function;
-pub mod object;
-pub mod parser;
-pub mod resolver;
-pub mod scanner;
-pub mod stmt;
-pub mod token;
+pub mod vm;
