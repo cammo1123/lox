@@ -1,39 +1,39 @@
 use std::fmt;
 
 #[derive(Debug)]
-pub enum InterpreterError {
-	ParseError(ParseError),
+pub enum RLoxError {
+	TokenError(TokenError),
 	RuntimeError(RuntimeError)
 }
 
-impl fmt::Display for InterpreterError {
+impl fmt::Display for RLoxError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            InterpreterError::ParseError(e) => write!(f, "{}", e),
-            InterpreterError::RuntimeError(e) => write!(f, "{}", e),
+            RLoxError::TokenError(e) => write!(f, "{}", e),
+            RLoxError::RuntimeError(e) => write!(f, "{}", e),
         }
     }
 }
 
-impl From<ParseError> for InterpreterError {
-    fn from(e: ParseError) -> Self {
-        InterpreterError::ParseError(e)
+impl From<TokenError> for RLoxError {
+    fn from(e: TokenError) -> Self {
+        RLoxError::TokenError(e)
     }
 }
 
-impl From<RuntimeError> for InterpreterError {
+impl From<RuntimeError> for RLoxError {
     fn from(e: RuntimeError) -> Self {
-        InterpreterError::RuntimeError(e)
+        RLoxError::RuntimeError(e)
     }
 }
 
 #[derive(Debug)]
-pub struct ParseError {
+pub struct TokenError {
     pub line: usize,
     pub message: String,
 }
 
-impl ParseError {
+impl TokenError {
     pub fn new(line: usize, message: &str) -> Self {
         Self {
             line,
@@ -42,9 +42,9 @@ impl ParseError {
     }
 }
 
-impl fmt::Display for ParseError {
+impl fmt::Display for TokenError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} - Parser error: {}", self.line, self.message)
+        write!(f, "Line {} - Token error: {}", self.line, self.message)
     }
 }
 
@@ -65,6 +65,6 @@ impl RuntimeError {
 
 impl fmt::Display for RuntimeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} - Runtime error: {}", self.line, self.message)
+        write!(f, "Line {} - Runtime error: {}", self.line, self.message)
     }
 }

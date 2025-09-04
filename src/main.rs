@@ -1,31 +1,75 @@
-use std::{rc::Rc};
+use std::io::{self, Write};
+use std::sync::{LazyLock, Mutex};
+use std::{env, fs::File, io::Read, process::exit};
 
-use rlox::{chunk::{Chunk, OpCode}, value::Value, vm::VM};
+use rlox::error::RLoxError;
+use rlox::vm::VM;
 
-pub fn main() {
-	let mut chunk = Chunk::new();
+pub fn repl() -> Result<(), Box<dyn std::error::Error>> {
+    let stdin = io::stdin();
+    let mut stdout = io::stdout();
+    
+    loop {
+        print!("> ");
+        stdout.flush()?;
 
-	let mut constant = chunk.add_constant(Rc::new(Value::Number(1.2)));
-	chunk.write(OpCode::OpConstant as u8, 123);
-	chunk.write(constant as u8, 123);
+        let mut line = String::new();
+        let bytes = stdin.read_line(&mut line)?;
 
-	constant = chunk.add_constant(Rc::new(Value::Number(3.4)));
-	chunk.write(OpCode::OpConstant as u8, 123);
-	chunk.write(constant as u8 , 123);
+        if bytes == 0 {
+            break;
+        }
 
-	chunk.write(OpCode::OpAdd as u8, 123);
+        let line = line.trim_end();
+        if line == "exit" || line == "quit" {
+            break;
+        }
 
-	constant = chunk.add_constant(Rc::new(Value::Number(5.6)));
-	chunk.write(OpCode::OpConstant as u8, 123);
-	chunk.write(constant as u8, 123);
+        if let Err(e) = interpret(line) {
+            eprintln!("Error {}", e);
+        }
 
-	chunk.write(OpCode::OpDivide as u8, 123);
-	chunk.write(OpCode::OpNegate as u8, 123);
+    }
+    
+    Ok(())
+}
 
-	chunk.write(OpCode::OpReturn as u8, 123);
-
-	let mut vm = VM::new(Rc::new(chunk));
-	if let Err(val) = vm.interpret() {
-		println!("{}", val)
+pub fn run_file(path: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let mut file = File::open(path)?;
+    let mut contents = String::new();
+    file.read_to_string(&mut contents)?;
+    
+	match interpret(&contents) {
+		Err(err) => Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("{}", err)))),
+		_ => Ok(())
 	}
+}
+
+fn interpret(source: &str) -> Result<(), RLoxError> {
+    VM::interpret(source)
+}
+
+fn main() {
+    let args: Vec<String> = env::args().collect();
+
+    match args.len() {
+        1 => {
+            if let Err(e) = repl() {
+                eprintln!("REPL Error: {}", e);
+                exit(70);
+            }
+        }
+
+        2 => {
+            if let Err(e) = run_file(&args[1]) {
+                eprintln!("Error running file: {}", e);
+                exit(65);
+            }
+        }
+
+        _ => {
+            println!("Usage: jlox [script]");
+            exit(64);
+        }
+    }
 }

@@ -3,3 +3,6 @@ pub mod chunk;
 pub mod debug;
 pub mod error;
 pub mod vm;
+pub mod compiler;
+pub mod scanner;
+pub mod token;

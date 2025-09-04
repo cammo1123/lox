@@ -4,7 +4,8 @@ use std::rc::Rc;
 use num_traits::FromPrimitive;
 
 use crate::chunk::{Chunk, OpCode};
-use crate::error::{InterpreterError, RuntimeError};
+use crate::compiler::Compiler;
+use crate::error::{RLoxError, RuntimeError};
 use crate::value::Value;
 
 pub struct VM {
@@ -16,21 +17,21 @@ pub struct VM {
 }
 
 impl VM {
-    pub fn new(chunk: Rc<Chunk>) -> Self {
-		VM {
+	pub fn interpret(source: &str) -> Result<(), RLoxError> {
+		let chunk = Rc::new(Compiler::compile(source)?);
+
+		let mut vm = VM {
 			chunk: Rc::clone(&chunk),
 			code: Rc::clone(&chunk.code),
 			ip: 0,
 			stack: Vec::with_capacity(256),
 			instruction_line: 0,
-		}
-    }
-	
-	pub fn interpret(&mut self) -> Result<(), InterpreterError> {
-		self.run()
+		};
+
+		vm.run()
 	}
 
-    fn run(&mut self) -> Result<(), InterpreterError> {
+    fn run(&mut self) -> Result<(), RLoxError> {
         loop {
 			#[cfg(feature = "debug_trace_execution")]{
 				use crate::debug::Disassemble;
@@ -104,7 +105,7 @@ impl VM {
         }
     }
 
-	fn read_byte(&mut self) -> Result<u8, InterpreterError> {
+	fn read_byte(&mut self) -> Result<u8, RLoxError> {
 		let byte = match { self.code.borrow().get(self.ip).copied() } {
 			Some(x) => Ok(x),
 			None => {
@@ -116,7 +117,7 @@ impl VM {
 		Ok(byte)
 	}
 
-	fn read_constant(&mut self) -> Result<Value, InterpreterError>{
+	fn read_constant(&mut self) -> Result<Value, RLoxError>{
 		let position = self.read_byte()?;
 		let constant = self.chunk.constants.get(position as usize)
 			.ok_or((|| {

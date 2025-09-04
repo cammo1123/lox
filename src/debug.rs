@@ -2,14 +2,14 @@ use std::usize;
 
 use num_traits::FromPrimitive;
 
-use crate::{chunk::{Chunk, OpCode}, error::{InterpreterError, RuntimeError}};
+use crate::{chunk::{Chunk, OpCode}, error::{RLoxError, RuntimeError}};
 
 pub struct Disassemble {
 
 }
 
 impl Disassemble {
-	pub fn chunk(chunk: &Chunk, name: &str) -> Result<(), InterpreterError>  {
+	pub fn chunk(chunk: &Chunk, name: &str) -> Result<(), RLoxError>  {
 		println!("== {} ==", name);
 
 		let mut offset = 0usize;
@@ -20,7 +20,7 @@ impl Disassemble {
 		Ok(())
 	}
 
-	pub fn instruction(chunk: &Chunk, offset: usize) -> Result<usize, InterpreterError> {
+	pub fn instruction(chunk: &Chunk, offset: usize) -> Result<usize, RLoxError> {
 		print!("{:04} ", offset);
 
 		
