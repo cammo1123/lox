@@ -184,7 +184,7 @@ impl<'src> Compiler<'src> {
 	fn synchronize(&mut self) -> Result<(), RLoxError> {
 		self.parser.panic_mode = false;
 
-		while self.curr()?.token_type == TokenType::EOF {
+		while self.curr()?.token_type != TokenType::EOF {
 			if self.prev()?.token_type == TokenType::SemiColon {
 				return Ok(())
 			}
