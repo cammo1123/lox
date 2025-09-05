@@ -44,11 +44,18 @@ impl Disassemble {
 		return match OpCode::from_u8(*instruction) {
 			Some(OpCode::OpReturn) => Ok(Self::simple_instruction("OpReturn", offset)?),
 			Some(OpCode::OpNegate) => Ok(Self::simple_instruction("OpNegate", offset)?),
+			Some(OpCode::OpNot) => Ok(Self::simple_instruction("OpNot", offset)?),
 			Some(OpCode::OpAdd) => Ok(Self::simple_instruction("OpAdd", offset)?),
 			Some(OpCode::OpSubtract) => Ok(Self::simple_instruction("OpSubtract", offset)?),
 			Some(OpCode::OpDivide) => Ok(Self::simple_instruction("OpDivide", offset)?),
 			Some(OpCode::OpMultiply) => Ok(Self::simple_instruction("OpMultiply", offset)?),
 			Some(OpCode::OpConstant) => Ok(Self::constant_instruction("OpConstant", chunk, offset)?),
+			Some(OpCode::OpNil) => Ok(Self::simple_instruction("OpNil", offset)?),
+			Some(OpCode::OpTrue) => Ok(Self::simple_instruction("OpTrue", offset)?),
+			Some(OpCode::OpFalse) => Ok(Self::simple_instruction("OpFalse", offset)?),
+			Some(OpCode::OpEqual) => Ok(Self::simple_instruction("OpEqual", offset)?),
+			Some(OpCode::OpLess) => Ok(Self::simple_instruction("OpLess", offset)?),
+			Some(OpCode::OpGreater) => Ok(Self::simple_instruction("OpGreater", offset)?),
 			_ => {
 				println!("Unknown opcode {}", instruction);
 				return Ok(offset + 1);

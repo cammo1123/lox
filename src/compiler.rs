@@ -50,6 +50,10 @@ fn binary_wrapper<'src>(c: &mut Compiler<'src>) -> Result<(), RLoxError> {
     c.binary()
 }
 
+fn literal_wrapper<'src>(c: &mut Compiler<'src>) -> Result<(), RLoxError> {
+    c.literal()
+}
+
 impl<'src> Compiler<'src> {
 	pub fn new(source: &'src str) -> Self {
         let mut rules = HashMap::new();
@@ -64,31 +68,31 @@ impl<'src> Compiler<'src> {
         rules.insert(TokenType::SemiColon,   ParseRule { prefix: None, infix: None, precedence: Precedence::None as u8 });
         rules.insert(TokenType::Slash,       ParseRule { prefix: None, infix: Some(binary_wrapper), precedence: Precedence::Factor as u8 });
         rules.insert(TokenType::Star,        ParseRule { prefix: None, infix: Some(binary_wrapper), precedence: Precedence::Factor as u8 });
-        rules.insert(TokenType::Bang,        ParseRule { prefix: None, infix: None, precedence: Precedence::None as u8 });
-        rules.insert(TokenType::BangEqual,   ParseRule { prefix: None, infix: None, precedence: Precedence::None as u8 });
+        rules.insert(TokenType::Bang,        ParseRule { prefix: Some(unary_wrapper), infix: None, precedence: Precedence::None as u8 });
+        rules.insert(TokenType::BangEqual,   ParseRule { prefix: None, infix: Some(binary_wrapper), precedence: Precedence::Equality as u8 });
         rules.insert(TokenType::Equal,       ParseRule { prefix: None, infix: None, precedence: Precedence::None as u8 });
-        rules.insert(TokenType::EqualEqual,  ParseRule { prefix: None, infix: None, precedence: Precedence::None as u8 });
-        rules.insert(TokenType::Greater,     ParseRule { prefix: None, infix: None, precedence: Precedence::None as u8 });
-        rules.insert(TokenType::GreaterEqual,ParseRule { prefix: None, infix: None, precedence: Precedence::None as u8 });
-        rules.insert(TokenType::Less,        ParseRule { prefix: None, infix: None, precedence: Precedence::None as u8 });
-        rules.insert(TokenType::LessEqual,   ParseRule { prefix: None, infix: None, precedence: Precedence::None as u8 });
+        rules.insert(TokenType::EqualEqual,  ParseRule { prefix: None, infix: Some(binary_wrapper), precedence: Precedence::Equality as u8 });
+        rules.insert(TokenType::Greater,     ParseRule { prefix: None, infix: Some(binary_wrapper), precedence: Precedence::Comparison as u8 });
+        rules.insert(TokenType::GreaterEqual,ParseRule { prefix: None, infix: Some(binary_wrapper), precedence: Precedence::Comparison as u8 });
+        rules.insert(TokenType::Less,        ParseRule { prefix: None, infix: Some(binary_wrapper), precedence: Precedence::Comparison as u8 });
+        rules.insert(TokenType::LessEqual,   ParseRule { prefix: None, infix: Some(binary_wrapper), precedence: Precedence::Comparison as u8 });
         rules.insert(TokenType::Identifier,  ParseRule { prefix: None, infix: None, precedence: Precedence::None as u8 });
         rules.insert(TokenType::String,      ParseRule { prefix: None, infix: None, precedence: Precedence::None as u8 });
         rules.insert(TokenType::Number,      ParseRule { prefix: Some(number_wrapper), infix: None, precedence: Precedence::None as u8 });
         rules.insert(TokenType::And,         ParseRule { prefix: None, infix: None, precedence: Precedence::None as u8 });
         rules.insert(TokenType::Class,       ParseRule { prefix: None, infix: None, precedence: Precedence::None as u8 });
         rules.insert(TokenType::Else,        ParseRule { prefix: None, infix: None, precedence: Precedence::None as u8 });
-        rules.insert(TokenType::False,       ParseRule { prefix: None, infix: None, precedence: Precedence::None as u8 });
+        rules.insert(TokenType::False,       ParseRule { prefix: Some(literal_wrapper), infix: None, precedence: Precedence::None as u8 });
         rules.insert(TokenType::For,         ParseRule { prefix: None, infix: None, precedence: Precedence::None as u8 });
         rules.insert(TokenType::Fun,         ParseRule { prefix: None, infix: None, precedence: Precedence::None as u8 });
         rules.insert(TokenType::If,          ParseRule { prefix: None, infix: None, precedence: Precedence::None as u8 });
-        rules.insert(TokenType::Nil,         ParseRule { prefix: None, infix: None, precedence: Precedence::None as u8 });
+        rules.insert(TokenType::Nil,         ParseRule { prefix: Some(literal_wrapper), infix: None, precedence: Precedence::None as u8 });
         rules.insert(TokenType::Or,          ParseRule { prefix: None, infix: None, precedence: Precedence::None as u8 });
         rules.insert(TokenType::Print,       ParseRule { prefix: None, infix: None, precedence: Precedence::None as u8 });
         rules.insert(TokenType::Return,      ParseRule { prefix: None, infix: None, precedence: Precedence::None as u8 });
         rules.insert(TokenType::Super,       ParseRule { prefix: None, infix: None, precedence: Precedence::None as u8 });
         rules.insert(TokenType::This,        ParseRule { prefix: None, infix: None, precedence: Precedence::None as u8 });
-        rules.insert(TokenType::True,        ParseRule { prefix: None, infix: None, precedence: Precedence::None as u8 });
+        rules.insert(TokenType::True,        ParseRule { prefix: Some(literal_wrapper), infix: None, precedence: Precedence::None as u8 });
         rules.insert(TokenType::Var,         ParseRule { prefix: None, infix: None, precedence: Precedence::None as u8 });
         rules.insert(TokenType::While,       ParseRule { prefix: None, infix: None, precedence: Precedence::None as u8 });
         rules.insert(TokenType::EOF,         ParseRule { prefix: None, infix: None, precedence: Precedence::None as u8 });
@@ -173,6 +177,26 @@ impl<'src> Compiler<'src> {
 			TokenType::Minus => self.emit_byte(OpCode::OpSubtract as u8),
 			TokenType::Star => self.emit_byte(OpCode::OpMultiply as u8),
 			TokenType::Slash => self.emit_byte(OpCode::OpDivide as u8),
+			TokenType::BangEqual => self.emit_bytes(OpCode::OpEqual as u8, OpCode::OpNot as u8),
+			TokenType::EqualEqual => self.emit_byte(OpCode::OpEqual as u8),
+			TokenType::Greater => self.emit_byte(OpCode::OpGreater as u8),
+			TokenType::GreaterEqual => self.emit_bytes(OpCode::OpLess as u8, OpCode::OpNot as u8),
+			TokenType::Less => self.emit_byte(OpCode::OpLess as u8),
+			TokenType::LessEqual => self.emit_bytes(OpCode::OpGreater as u8, OpCode::OpNot as u8),
+			_ => unreachable!()
+		}
+	}
+
+	fn literal(&mut self) -> Result<(), RLoxError> {
+		let prev = self
+			.parser
+			.previous
+			.ok_or(CompilerError::new(0, "Previous token is undefined"))?;
+
+		match prev.token_type {
+			TokenType::True => self.emit_byte(OpCode::OpTrue as u8),
+			TokenType::Nil => self.emit_byte(OpCode::OpNil as u8),
+			TokenType::False => self.emit_byte(OpCode::OpFalse as u8),
 			_ => unreachable!()
 		}
 	}
@@ -210,9 +234,13 @@ impl<'src> Compiler<'src> {
 		self.parse_precedence(Precedence::Unary)?;
 
 		match operator_type {
+			TokenType::Bang => {
+				self.emit_byte(OpCode::OpNot as u8)
+			}
+			
 			TokenType::Minus => {
 				self.emit_byte(OpCode::OpNegate as u8)
-			},
+			}
 
 			_ => unreachable!()
 		}

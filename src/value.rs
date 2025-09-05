@@ -11,8 +11,8 @@ use std::fmt;
 /// The VM value: small values are stored directly; bigger ones are Rc<Obj>.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
-    // Bool(bool),
-    // Nil,
+    Bool(bool),
+    Nil,
     Number(f64),
     // Obj(Rc<Obj>),
 }
@@ -58,8 +58,8 @@ impl Value {
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            // Value::Bool(b) => write!(f, "{}", b),
-            // Value::Nil => write!(f, "nil"),
+            Value::Bool(b) => write!(f, "{}", b),
+            Value::Nil => write!(f, "nil"),
             Value::Number(n) => {
                 // mimic C's %g-ish printing: let Rust do its default formatting
                 write!(f, "{}", n)

@@ -19,7 +19,7 @@ pub struct VM {
 impl VM {
 	pub fn interpret(source: &str) -> Result<(), RLoxError> {
         let mut compiler = Compiler::new(source);
-        let _res = compiler.compile()?;
+        let res = compiler.compile()?;
         let chunk = compiler.current_chunk;
 
         let mut vm = VM {
@@ -30,7 +30,11 @@ impl VM {
             instruction_line: 0,
         };
 
-        vm.run()
+		if res {
+			vm.run()?;
+		}
+
+		Ok(())
     }
 
     fn run(&mut self) -> Result<(), RLoxError> {
@@ -51,10 +55,14 @@ impl VM {
 
 				Some(OpCode::OpNegate) => {
 					let value = self.pop()?;
-					self.stack.push(match value {
+					let res = match value {
 						Value::Number(num) => Ok(Value::Number(-num)),
-						_ => Err(RuntimeError::new(self.instruction_line, "Cannot negate non number"))
-					}?);
+						_ => {
+							self.stack.push(value);
+							Err(RuntimeError::new(self.instruction_line, "Cannot negate non number"))
+						}
+					}?;
+					self.stack.push(res)
 				}
 
 				Some(OpCode::OpAdd) => {
@@ -96,10 +104,55 @@ impl VM {
 						_ => Err(RuntimeError::new(self.instruction_line, "Cannot subtract two non numbers"))
 					}?);
 				}
-				
+
+				Some(OpCode::OpGreater) => {
+					let b = self.pop()?;
+					let a = self.pop()?;
+					
+					self.stack.push(match (a, b) {
+						(Value::Number(a), Value::Number(b)) => Ok(Value::Bool(a > b)),
+						_ => Err(RuntimeError::new(self.instruction_line, "Cannot compare two non numbers"))
+					}?);
+				}
+
+				Some(OpCode::OpLess) => {
+					let b = self.pop()?;
+					let a = self.pop()?;
+					
+					self.stack.push(match (a, b) {
+						(Value::Number(a), Value::Number(b)) => Ok(Value::Bool(a < b)),
+						_ => Err(RuntimeError::new(self.instruction_line, "Cannot compare two non numbers"))
+					}?);
+				}
+
 				Some(OpCode::OpConstant) => {
 					let constant = self.read_constant()?;
 					self.stack.push(constant);
+				}
+
+				Some(OpCode::OpNil) => {
+					self.stack.push(Value::Nil);
+				}
+
+				Some(OpCode::OpTrue) => {
+					self.stack.push(Value::Bool(true));
+				}
+				
+				Some(OpCode::OpFalse) => {
+					self.stack.push(Value::Bool(false));
+				}
+
+				Some(OpCode::OpNot) => {
+					let val = self.pop()?;
+					let not = Value::Bool(self.is_falsey(&val));
+					self.stack.push(not);
+				}
+
+				Some(OpCode::OpEqual) => {
+					let a = self.pop()?;
+					let b = self.pop()?;
+					let equals = Value::Bool(self.values_equal(&a, &b));
+					self.stack.push(equals);
 				}
                 
 				_ => {}
@@ -138,5 +191,17 @@ impl VM {
 
 	fn pop(&mut self) -> Result<Value, RuntimeError> {
 		self.stack.pop().ok_or(RuntimeError::new(self.instruction_line, "No value on stack"))
+	}
+
+	fn is_falsey(&mut self, value: &Value) -> bool {
+		match value {
+			Value::Bool(val) => !val,
+			Value::Nil => true,
+			_ => false
+		}
+	}
+
+	fn values_equal(&mut self, a: &Value, b: &Value) -> bool {
+		*a == *b
 	}
 }
