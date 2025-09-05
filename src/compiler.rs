@@ -27,35 +27,39 @@ pub struct Compiler<'src> {
 	parse_rules: HashMap<TokenType, ParseRule>
 }
 
-type ParseFn = fn(&mut Compiler) -> Result<(), RLoxError>;
+type ParseFn = fn(&mut Compiler, can_assign: bool) -> Result<(), RLoxError>;
 struct ParseRule {
 	prefix: Option<ParseFn>,
 	infix: Option<ParseFn>,
 	precedence: u8
 }
 
-fn grouping_wrapper<'src>(c: &mut Compiler<'src>) -> Result<(), RLoxError> {
-    c.grouping()
+fn grouping_wrapper<'src>(c: &mut Compiler<'src>, can_assign: bool) -> Result<(), RLoxError> {
+    c.grouping(can_assign)
 }
 
-fn number_wrapper<'src>(c: &mut Compiler<'src>) -> Result<(), RLoxError> {
-    c.number()
+fn number_wrapper<'src>(c: &mut Compiler<'src>, can_assign: bool) -> Result<(), RLoxError> {
+    c.number(can_assign)
 }
 
-fn unary_wrapper<'src>(c: &mut Compiler<'src>) -> Result<(), RLoxError> {
-    c.unary()
+fn unary_wrapper<'src>(c: &mut Compiler<'src>, can_assign: bool) -> Result<(), RLoxError> {
+    c.unary(can_assign)
 }
 
-fn binary_wrapper<'src>(c: &mut Compiler<'src>) -> Result<(), RLoxError> {
-    c.binary()
+fn binary_wrapper<'src>(c: &mut Compiler<'src>, can_assign: bool) -> Result<(), RLoxError> {
+    c.binary(can_assign)
 }
 
-fn literal_wrapper<'src>(c: &mut Compiler<'src>) -> Result<(), RLoxError> {
-    c.literal()
+fn literal_wrapper<'src>(c: &mut Compiler<'src>, can_assign: bool) -> Result<(), RLoxError> {
+    c.literal(can_assign)
 }
 
-fn string_wrapper<'src>(c: &mut Compiler<'src>) -> Result<(), RLoxError> {
-    c.string()
+fn string_wrapper<'src>(c: &mut Compiler<'src>, can_assign: bool) -> Result<(), RLoxError> {
+    c.string(can_assign)
+}
+
+fn variable_wrapper<'src>(c: &mut Compiler<'src>, can_assign: bool) -> Result<(), RLoxError> {
+    c.variable(can_assign)
 }
 
 impl<'src> Compiler<'src> {
@@ -80,7 +84,7 @@ impl<'src> Compiler<'src> {
         rules.insert(TokenType::GreaterEqual,ParseRule { prefix: None, infix: Some(binary_wrapper), precedence: Precedence::Comparison as u8 });
         rules.insert(TokenType::Less,        ParseRule { prefix: None, infix: Some(binary_wrapper), precedence: Precedence::Comparison as u8 });
         rules.insert(TokenType::LessEqual,   ParseRule { prefix: None, infix: Some(binary_wrapper), precedence: Precedence::Comparison as u8 });
-        rules.insert(TokenType::Identifier,  ParseRule { prefix: None, infix: None, precedence: Precedence::None as u8 });
+        rules.insert(TokenType::Identifier,  ParseRule { prefix: Some(variable_wrapper), infix: None, precedence: Precedence::None as u8 });
         rules.insert(TokenType::String,      ParseRule { prefix: Some(string_wrapper), infix: None, precedence: Precedence::None as u8 });
         rules.insert(TokenType::Number,      ParseRule { prefix: Some(number_wrapper), infix: None, precedence: Precedence::None as u8 });
         rules.insert(TokenType::And,         ParseRule { prefix: None, infix: None, precedence: Precedence::None as u8 });
@@ -114,11 +118,140 @@ impl<'src> Compiler<'src> {
 		self.parser.had_error = false;
 
 		self.advance()?;
-		self.expression()?;
-		self.consume(TokenType::EOF, "Expect end of expression.")?;
+		while !self.match_token(TokenType::EOF)? {
+			self.declaration()?;
+		}
 
 		self.end()?;
 		Ok(!self.parser.had_error)
+	}
+
+	fn declaration(&mut self) -> Result<(), RLoxError> {
+		if self.match_token(TokenType::Var)? {
+			self.var_declaration()?;
+		} else {
+			self.statement()?;
+		}
+
+		if self.parser.panic_mode {
+			self.synchronize()?;
+		}
+
+		Ok(())
+	}
+
+	fn var_declaration(&mut self) -> Result<(), RLoxError> {
+		let global = self.parse_variable("Expect variable name.")?;
+
+		if self.match_token(TokenType::Equal)? {
+			self.expression()?;
+		} else {
+			self.emit_byte(OpCode::OpNil as u8)?;
+		}
+
+		self.consume(TokenType::SemiColon, "Expect ';' after variable declaration.")?;
+		self.define_variable(global)
+	}
+
+	fn variable(&mut self, can_assign: bool) -> Result<(), RLoxError> {
+		self.named_variable(&self.prev()?, can_assign)
+	}
+
+	fn named_variable(&mut self, token: &Token, can_assign: bool) -> Result<(), RLoxError> {
+		let arg = self.identifier_constant(&token);
+
+		if can_assign && self.match_token(TokenType::Equal)? {
+			self.expression()?;
+			self.emit_bytes(OpCode::OpSetGlobal as u8, arg)
+		} else {
+			self.emit_bytes(OpCode::OpGetGlobal as u8, arg)
+		}
+	}
+
+	fn parse_variable(&mut self, message: &str) -> Result<u8, RLoxError> {
+		self.consume(TokenType::Identifier, message)?;
+		Ok(self.identifier_constant(&self.prev()?))
+	}
+
+	fn define_variable(&mut self, global: u8) -> Result<(), RLoxError> {
+		self.emit_bytes(OpCode::OpDefineGlobal as u8, global)
+	}
+
+	fn identifier_constant(&mut self, name: &Token) -> u8 {
+		self.make_constant(Value::obj(Obj::String(self.copy_string(name.start, name.length))))
+	}
+
+	fn synchronize(&mut self) -> Result<(), RLoxError> {
+		self.parser.panic_mode = false;
+
+		while self.curr()?.token_type == TokenType::EOF {
+			if self.prev()?.token_type == TokenType::SemiColon {
+				return Ok(())
+			}
+
+			match self.prev()?.token_type {
+				TokenType::Class | TokenType::Fun | TokenType::Var | 
+				TokenType::For | TokenType::If | TokenType::While |
+				TokenType::Print | TokenType::Return => {
+					return Ok(());
+				}
+
+				_ => {}
+			}
+
+			self.advance()?;
+		}
+
+		Ok(())
+	}
+
+	fn statement(&mut self) -> Result<(), RLoxError> {
+		if self.match_token(TokenType::Print)? {
+			self.print_statement()?;
+		} else {
+			self.expression_statement()?;
+		}
+
+		Ok(())
+	}
+
+	fn expression_statement(&mut self) -> Result<(), RLoxError> {
+		self.expression()?;
+		self.consume(TokenType::SemiColon, "Expect ';' after expression.")?;
+		self.emit_byte(OpCode::OpPop as u8)
+	}
+
+	fn match_token(&mut self, token_type: TokenType) -> Result<bool, RLoxError> {
+		if !self.check(token_type)? {
+			return Ok(false);
+		}
+
+		self.advance()?;
+		Ok(true)
+	}
+
+	fn check(&self, token_type: TokenType) -> Result<bool, RLoxError> {
+		Ok(self.curr()?.token_type == token_type)
+	}
+
+	fn curr(&self) -> Result<Token, CompilerError> {
+		self
+			.parser
+			.current
+			.ok_or(CompilerError::new(0, "Current token is undefined"))
+	}
+
+	fn prev(&self) -> Result<Token, CompilerError> {
+		self
+			.parser
+			.previous
+			.ok_or(CompilerError::new(0, "Current token is undefined"))
+	}
+
+	fn print_statement(&mut self) -> Result<(), RLoxError> {
+		self.expression()?;
+		self.consume(TokenType::SemiColon, "Expect ';' after value.")?;
+		self.emit_byte(OpCode::OpPrint as u8)
 	}
 
 	fn advance(&mut self) -> Result<(), RLoxError> {
@@ -140,7 +273,7 @@ impl<'src> Compiler<'src> {
 	}
 
 	fn consume(&mut self, token_type: TokenType, message: &str) -> Result<(), RLoxError> {
-		if self.parser.current.ok_or(CompilerError::new(0, "Current token is undefined"))?.token_type == token_type {
+		if self.curr()?.token_type == token_type {
 			self.advance()?;
 			return Ok(());
 		}
@@ -163,16 +296,11 @@ impl<'src> Compiler<'src> {
 		Ok(())
 	}
 
-	fn binary(&mut self) -> Result<(), RLoxError> {
-		let prev = self
-			.parser
-			.previous
-			.ok_or(CompilerError::new(0, "Previous token is undefined"))?;
-
-		let operator_type = prev.token_type;
+	fn binary(&mut self, _can_assign: bool) -> Result<(), RLoxError> {
+		let operator_type = self.prev()?.token_type;
 		let rule = self.get_rule(operator_type)?;
 		let new_precedence = Precedence::from_u8(rule.precedence + 1)
-			.ok_or(CompilerError::new(prev.line, "Invalid Precedence"))?;
+			.ok_or(CompilerError::new(self.prev()?.line, "Invalid Precedence"))?;
 		
 		self.parse_precedence(new_precedence)?;
 
@@ -191,13 +319,8 @@ impl<'src> Compiler<'src> {
 		}
 	}
 
-	fn literal(&mut self) -> Result<(), RLoxError> {
-		let prev = self
-			.parser
-			.previous
-			.ok_or(CompilerError::new(0, "Previous token is undefined"))?;
-
-		match prev.token_type {
+	fn literal(&mut self, _can_assign: bool) -> Result<(), RLoxError> {
+		match self.prev()?.token_type {
 			TokenType::True => self.emit_byte(OpCode::OpTrue as u8),
 			TokenType::Nil => self.emit_byte(OpCode::OpNil as u8),
 			TokenType::False => self.emit_byte(OpCode::OpFalse as u8),
@@ -205,12 +328,8 @@ impl<'src> Compiler<'src> {
 		}
 	}
 
-	fn string(&mut self) -> Result<(), RLoxError> {
-		let prev = self
-			.parser
-			.previous
-			.ok_or(CompilerError::new(0, "Previous token is undefined"))?;
-
+	fn string(&mut self, _can_assign: bool) -> Result<(), RLoxError> {
+		let prev = self.prev()?;
 		self.emit_constant(Value::obj(Obj::String(self.copy_string(prev.start + 1, prev.length - 2))))
 	}
 
@@ -224,16 +343,13 @@ impl<'src> Compiler<'src> {
 			.ok_or(CompilerError::new(0, "No rule found for token type"))
 	}
 
-	fn grouping(&mut self) -> Result<(), RLoxError> {
+	fn grouping(&mut self, _can_assign: bool) -> Result<(), RLoxError> {
 		self.expression()?;
 		self.consume(TokenType::RightParen, "Expect ')' after expression.")
 	}
 
-	fn number(&mut self) -> Result<(), RLoxError> {
-		let prev = self
-			.parser
-			.previous
-			.ok_or(CompilerError::new(0, "Previous token is undefined"))?;
+	fn number(&mut self, _can_assign: bool) -> Result<(), RLoxError> {
+		let prev = self.prev()?;
 	
 		let value = Value::Number(prev.slice(self.scanner.source).parse()
 			.map_err(|e| CompilerError::new(prev.line, &format!("Unable to convert token to a number: {}", e).to_owned()))?);
@@ -241,13 +357,8 @@ impl<'src> Compiler<'src> {
 	    self.emit_constant(value)
 	}
 
-	fn unary(&mut self) -> Result<(), RLoxError> {
-		let prev = self
-			.parser
-			.previous
-			.ok_or(CompilerError::new(0, "Previous token is undefined"))?;
-
-		let operator_type = prev.token_type;
+	fn unary(&mut self, _can_assign: bool) -> Result<(), RLoxError> {
+		let operator_type = self.prev()?.token_type;
 
 		self.parse_precedence(Precedence::Unary)?;
 
@@ -267,35 +378,30 @@ impl<'src> Compiler<'src> {
 	fn parse_precedence(&mut self, precedence: Precedence) -> Result<(), RLoxError> {
 		self.advance()?;
 
-		let mut prev = self
-			.parser
-			.previous
-			.ok_or(CompilerError::new(0, "Previous token is undefined"))?;
-
+		let mut prev = self.prev()?;
 		let prefix_rule = match self.get_rule(prev.token_type)?.prefix {
 			Some(prefix) => prefix,
 			None => return Ok(self.error("Expect expression.")),
 		};
 
-		prefix_rule(self)?;
 		let pre = precedence as u8;
-		while pre <= { 
-			let current_token = self.parser.current.ok_or(CompilerError::new(0, "Current token is undefined"))?.token_type;
-			self.get_rule(current_token)?.precedence
-		} {
-				self.advance()?;
+		let can_assign = pre <= Precedence::Assignment as u8;
+		prefix_rule(self, can_assign)?;
 
-				prev = self
-					.parser
-					.previous
-					.ok_or(CompilerError::new(0, "Previous token is undefined"))?;
+		while pre <= self.get_rule(self.curr()?.token_type)?.precedence {
+			self.advance()?;
+			prev = self.prev()?;
 
-				let infix_rule =  match self.get_rule(prev.token_type)?.infix {
-					Some(prefix) => prefix,
-					None => return Ok(self.error("Expect expression.")),
-				};
+			let infix_rule =  match self.get_rule(prev.token_type)?.infix {
+				Some(prefix) => prefix,
+				None => return Ok(self.error("Expect expression.")),
+			};
 
-				infix_rule(self)?;
+			infix_rule(self, can_assign)?;
+		}
+
+		if can_assign && self.match_token(TokenType::Equal)? {
+			self.error("Invalid assignment target.");
 		}
 
 		Ok(())
@@ -316,12 +422,7 @@ impl<'src> Compiler<'src> {
 	}
 
 	fn emit_byte(&mut self, byte: u8) -> Result<(), RLoxError> {
-		let prev = self
-			.parser
-			.previous
-			.ok_or(CompilerError::new(0, "Previous token is undefined"))?;
-	
-		self.current_chunk.borrow_mut().write(byte as u8, prev.line);
+		self.current_chunk.borrow_mut().write(byte as u8, self.prev()?.line);
 		Ok(())
 	}
 

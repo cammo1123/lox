@@ -3,6 +3,8 @@ use std::rc::Rc;
 
 use num_traits::FromPrimitive;
 
+use std::collections::HashMap;
+
 use crate::chunk::{Chunk, OpCode};
 use crate::compiler::Compiler;
 use crate::error::{RLoxError, RuntimeError};
@@ -11,6 +13,7 @@ use crate::value::{Obj, Value};
 pub struct VM {
 	chunk: Rc<RefCell<Chunk>>,
 	code: Rc<RefCell<Vec<u8>>>,
+	globals: HashMap<String, Value>,
 	ip: usize,
 	stack: Vec<Value>,
 	instruction_line: usize,
@@ -25,6 +28,7 @@ impl VM {
 		let mut vm = VM {
 			chunk: Rc::clone(&chunk),
 			code: Rc::clone(&chunk.borrow().code),
+			globals: HashMap::new(),
 			ip: 0,
 			stack: Vec::with_capacity(256),
 			instruction_line: 0,
@@ -50,8 +54,11 @@ impl VM {
 			let instruction = self.read_byte()?;
 			match OpCode::from_u8(instruction) {
 				Some(OpCode::OpReturn) => {
-					println!("{}", self.pop()?);
 					return Ok(());
+				}
+
+				Some(OpCode::OpPrint) => {
+					println!("{}", self.pop()?);
 				}
 
 				Some(OpCode::OpNegate) => {
@@ -181,6 +188,57 @@ impl VM {
 					self.stack.push(Value::Bool(false));
 				}
 
+				Some(OpCode::OpPop) => {
+					self.pop()?;
+				}
+
+				Some(OpCode::OpDefineGlobal) => {
+					let name_value = self.read_constant()?;
+					if let Value::Obj(_) = name_value {
+						let name = name_value.to_string();
+						self.globals.insert(name, self.peek()?.clone());
+						self.pop()?;
+					} else {
+						return Err(RLoxError::RuntimeError(RuntimeError::new(
+							self.instruction_line,
+							"Variable name must be a string.",
+						)));
+					}
+				}
+
+				Some(OpCode::OpSetGlobal) => {
+					let name_value = self.read_constant()?;
+					if let Value::Obj(_) = name_value {
+						let name = name_value.to_string();
+						self.globals.insert(name, self.peek()?.clone());
+					} else {
+						return Err(RLoxError::RuntimeError(RuntimeError::new(
+							self.instruction_line,
+							"Variable name must be a string.",
+						)));
+					}
+				}
+
+				Some(OpCode::OpGetGlobal) => {
+					let name_value = self.read_constant()?;
+					if let Value::Obj(_) = name_value {
+						let name = name_value.to_string();
+						if let Some(val) = self.globals.get(&name) {
+							self.stack.push(val.clone());
+						} else {
+							return Err(RLoxError::RuntimeError(RuntimeError::new(
+								self.instruction_line,
+								&format!("Undefined variable '{}'.", name).to_owned()
+							)));
+						}
+					} else {
+						return Err(RLoxError::RuntimeError(RuntimeError::new(
+							self.instruction_line,
+							"Variable name must be a string.",
+						)));
+					}
+				}
+
 				Some(OpCode::OpNot) => {
 					let val = self.pop()?;
 					let not = Value::Bool(self.is_falsey(&val));
@@ -235,6 +293,11 @@ impl VM {
 		self.stack
 			.pop()
 			.ok_or(RuntimeError::new(self.instruction_line, "No value on stack"))
+	}
+
+	fn peek(&self) -> Result<&Value, RLoxError> {
+		self.stack.iter().peekable().next()
+			.ok_or(RLoxError::RuntimeError(RuntimeError::new(self.instruction_line, "No value to peek")))
 	}
 
 	fn is_falsey(&self, value: &Value) -> bool {

@@ -14,11 +14,8 @@ impl Obj {
     }
 
     pub fn as_string(&self) -> Option<&str> {
-        if let Obj::String(s) = self {
-            Some(s.as_str())
-        } else {
-            None
-        }
+        let Obj::String(s) = self;
+        Some(s.as_str())
     }
 
     /// Concatenate two Obj::String values. Accepts references to `Rc<Obj>`
