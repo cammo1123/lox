@@ -3,7 +3,7 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
-use crate::{chunk::{Chunk, OpCode}, error::{CompilerError, RLoxError}, parser::Parser, scanner::Scanner, token::{Token, TokenType}, value::Value};
+use crate::{chunk::{Chunk, OpCode}, error::{CompilerError, RLoxError}, parser::Parser, scanner::Scanner, token::{Token, TokenType}, value::{Obj, Value}};
 
 #[derive(FromPrimitive)]
 enum Precedence {
@@ -54,6 +54,10 @@ fn literal_wrapper<'src>(c: &mut Compiler<'src>) -> Result<(), RLoxError> {
     c.literal()
 }
 
+fn string_wrapper<'src>(c: &mut Compiler<'src>) -> Result<(), RLoxError> {
+    c.string()
+}
+
 impl<'src> Compiler<'src> {
 	pub fn new(source: &'src str) -> Self {
         let mut rules = HashMap::new();
@@ -77,7 +81,7 @@ impl<'src> Compiler<'src> {
         rules.insert(TokenType::Less,        ParseRule { prefix: None, infix: Some(binary_wrapper), precedence: Precedence::Comparison as u8 });
         rules.insert(TokenType::LessEqual,   ParseRule { prefix: None, infix: Some(binary_wrapper), precedence: Precedence::Comparison as u8 });
         rules.insert(TokenType::Identifier,  ParseRule { prefix: None, infix: None, precedence: Precedence::None as u8 });
-        rules.insert(TokenType::String,      ParseRule { prefix: None, infix: None, precedence: Precedence::None as u8 });
+        rules.insert(TokenType::String,      ParseRule { prefix: Some(string_wrapper), infix: None, precedence: Precedence::None as u8 });
         rules.insert(TokenType::Number,      ParseRule { prefix: Some(number_wrapper), infix: None, precedence: Precedence::None as u8 });
         rules.insert(TokenType::And,         ParseRule { prefix: None, infix: None, precedence: Precedence::None as u8 });
         rules.insert(TokenType::Class,       ParseRule { prefix: None, infix: None, precedence: Precedence::None as u8 });
@@ -199,6 +203,20 @@ impl<'src> Compiler<'src> {
 			TokenType::False => self.emit_byte(OpCode::OpFalse as u8),
 			_ => unreachable!()
 		}
+	}
+
+	fn string(&mut self) -> Result<(), RLoxError> {
+		let prev = self
+			.parser
+			.previous
+			.ok_or(CompilerError::new(0, "Previous token is undefined"))?;
+
+		self.emit_constant(Value::obj(Obj::String(self.copy_string(prev.start + 1, prev.length - 2))))
+	}
+
+	fn copy_string(&self, start: usize, length: usize) -> String {
+		let string = &self.scanner.source[start..start + length];
+		(*string).to_string()
 	}
 
 	fn get_rule(&mut self, token_type: TokenType) -> Result<&ParseRule, CompilerError> {
